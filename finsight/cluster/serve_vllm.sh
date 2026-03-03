@@ -19,9 +19,9 @@
 #SBATCH --job-name=finsight-vllm
 #SBATCH --partition=student
 #SBATCH --gres=gpu:a40:1
-#SBATCH --mem=80G                    # safe for both 40GB and 80GB A100
-#SBATCH --cpus-per-task=8
-#SBATCH --time=08:00:00              # 8 hours — resubmit if needed
+#SBATCH --mem=24G                    # safe for both 40GB and 80GB A100
+#SBATCH --cpus-per-task=4
+#SBATCH --time=02:00:00              # 8 hours — resubmit if needed
 #SBATCH --output=cluster/logs/vllm_%j.out
 #SBATCH --error=cluster/logs/vllm_%j.err
 
