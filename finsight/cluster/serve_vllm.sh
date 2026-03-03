@@ -28,7 +28,7 @@
 # =============================================================================
 # USER CONFIG — edit these two lines
 # =============================================================================
-HF_TOKEN="hf_YOUR_TOKEN_HERE"        # from huggingface.co/settings/tokens
+HF_TOKEN="vi cluster/serve_vllm.sh"        # from huggingface.co/settings/tokens
 MODEL_DIR="$HOME/finsight-llm/models"
 # =============================================================================
 
