@@ -17,8 +17,8 @@
 # =============================================================================
 
 #SBATCH --job-name=finsight-vllm
-#SBATCH --partition=gpu              # ← CHANGE to your GPU partition (check: sinfo -s)
-#SBATCH --gres=gpu:a100:1            # ← 1x A100 (try gpu:1 if this fails)
+#SBATCH --partition=student
+#SBATCH --gres=gpu:a40:1
 #SBATCH --mem=80G                    # safe for both 40GB and 80GB A100
 #SBATCH --cpus-per-task=8
 #SBATCH --time=08:00:00              # 8 hours — resubmit if needed
