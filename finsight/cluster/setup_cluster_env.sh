@@ -24,7 +24,7 @@ module load cuda/12.1 2>/dev/null || module load cuda 2>/dev/null || {
 }
 
 python3 --version
-pip --version
+python3 -m pip install -r requirements.txt
 
 # ── Create virtual environment ────────────────────────────────────────────────
 echo ""
