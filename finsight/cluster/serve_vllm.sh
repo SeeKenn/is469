@@ -37,10 +37,16 @@ mkdir -p cluster/logs "$MODEL_DIR"
 
 # ── Load cluster modules ──────────────────────────────────────────────────────
 # Adjust module names to match your cluster (check: module avail)
-module load python/3.11    2>/dev/null || module load python3 2>/dev/null || true
+module purge
+
+module load cuda/12.1 2>/dev/null || module load cuda 2>/dev/null || true
 module load cuda/12.1      2>/dev/null || module load cuda   2>/dev/null || true
 
 source ~/finsight-llm/venv/bin/activate
+
+python --version
+which python
+ldd ~/finsight-llm/venv/bin/python | grep libpython || true
 
 echo "=============================================="
 echo "FinSight vLLM Server"
