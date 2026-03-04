@@ -32,21 +32,22 @@ HF_TOKEN="vi cluster/serve_vllm.sh"        # from huggingface.co/settings/tokens
 MODEL_DIR="$HOME/finsight-llm/models"
 # =============================================================================
 
-set -e
-mkdir -p cluster/logs "$MODEL_DIR"
+set -euo pipefail
+mkdir -p cluster/logs 
 
 # ── Load cluster modules ──────────────────────────────────────────────────────
 # Adjust module names to match your cluster (check: module avail)
 module purge
 
-module load cuda/12.1 2>/dev/null || module load cuda 2>/dev/null || true
+module load Python/3.11.11-GCCcore-13.3.0
 module load cuda/12.1      2>/dev/null || module load cuda   2>/dev/null || true
 
 source ~/finsight-llm/venv/bin/activate
 
+
+echo "which python: $(which python)"
 python --version
-which python
-ldd ~/finsight-llm/venv/bin/python | grep libpython || true
+ldd "$(which python)" | grep libpython || true
 
 echo "=============================================="
 echo "FinSight vLLM Server"
