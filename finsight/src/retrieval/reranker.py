@@ -5,6 +5,7 @@ Takes (query, chunk_text) pairs and produces relevance scores.
 Returns top-k reranked chunks sorted by cross-encoder score.
 """
 
+import re
 import time
 from typing import List, Dict
 
@@ -19,6 +20,69 @@ try:
 except ImportError:
     CROSS_ENCODER_AVAILABLE = False
     logger.warning("sentence-transformers CrossEncoder not available")
+
+
+# Patterns to detect financial table data worth annotating
+
+# Match EBITDA reconciliation tables: have both "Adjusted EBITDA" number AND "Loss for year"
+_EBITDA_PAT = re.compile(
+    r'(?:Adjusted EBITDA|Total Segment Adjusted EBITDA)\s+\(?\d',
+    re.IGNORECASE
+)
+_LOSS_EBITDA_PAT = re.compile(
+    r'(?:Loss for the year|Adjusted EBITDA)',
+    re.IGNORECASE | re.MULTILINE
+)
+
+# Match ONLY pure table-format revenue rows (NOT narrative):
+# "Revenue 2,359 1,433" (adjacent numbers) but NOT "revenue of $112 million and..."
+_REVENUE_TABLE_PAT = re.compile(
+    r'\bRevenue\s+\d{1,3},\d{3}\s+\d{1,3},\d{3}',
+    re.IGNORECASE
+)
+
+
+def _clean_for_reranking(text: str) -> str:
+    """
+    Clean chunk text for cross-encoder scoring only.
+    Removes PDF scraping artifacts that confuse the model:
+      - URL/timestamp headers (e.g. "3/3/26, 10:50 PM 20-F Table of Contents")
+      - "20-F/6-K Table of Contents" navigation headers that appear on every page
+      - Excessive pipe characters from malformed table extraction (| | | 2,359 |)
+      - Redundant whitespace
+
+    For financial table chunks (reconciliation tables, revenue tables), prepends
+    a short descriptive hint so the cross-encoder can match them to financial
+    queries despite the non-sentence table structure.
+
+    The original stored text is NOT modified — this is scoring-only.
+    """
+    # Remove PDF scraper timestamp headers
+    text = re.sub(r'\d+/\d+/\d+,\s*\d+:\d+\s*[AP]M\s*', '', text)
+    # Remove "Form Table of Contents" navigation prefix (e.g. "20-F Table of Contents",
+    # "ck0001855612-20241231 Table of Contents", "6-K Table of Contents")
+    text = re.sub(
+        r'^(?:[\w\d\-]+\s+)?Table of Contents\s+',
+        '', text, flags=re.IGNORECASE
+    )
+    # Convert pipe-separated table rows into readable space-delimited rows
+    # "Revenue | | | 2,359 | | Deliveries" → "Revenue 2,359 Deliveries"
+    text = re.sub(r'\s*\|\s*', ' ', text)
+    # Collapse repeated spaces / newlines
+    text = re.sub(r'\s{2,}', ' ', text).strip()
+
+    # ── Financial table annotation ───────────────────────────────────────────
+    # Prepend a descriptive hint for table chunks so cross-encoder can match
+    # natural-language financial queries to numerical-dense table content.
+    hint = ""
+    if _EBITDA_PAT.search(text) and _LOSS_EBITDA_PAT.search(text):
+        hint = "Financial reconciliation table showing Adjusted EBITDA and Total Segment Adjusted EBITDA by year. "
+    elif _REVENUE_TABLE_PAT.search(text):
+        hint = "Financial table showing annual revenue figures by segment. "
+    if hint:
+        text = hint + text
+
+    return text
 
 
 class Reranker:
@@ -64,8 +128,8 @@ class Reranker:
         top_k = top_k or self.cfg["retrieval"]["rerank_top_k"]
         t0 = time.time()
 
-        # Prepare (query, passage) pairs
-        pairs = [(query, chunk["text"]) for chunk in chunks]
+        # Prepare (query, passage) pairs — clean text for scoring, preserve originals
+        pairs = [(query, _clean_for_reranking(chunk["text"])) for chunk in chunks]
 
         # Batch scoring with cross-encoder
         scores = self.model.predict(pairs, show_progress_bar=False)

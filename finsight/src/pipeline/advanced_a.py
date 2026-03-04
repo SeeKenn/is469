@@ -60,6 +60,7 @@ class AdvancedAPipeline:
         t0 = time.time()
         dense_top_k = self.cfg["retrieval"]["dense_top_k"]
         rerank_top_k = self.cfg["retrieval"]["rerank_top_k"]
+        final_context_k = self.cfg["retrieval"]["final_context_k"]
 
         # Step 1: Dense retrieval — wider net
         candidates = self.retriever.retrieve(question, top_k=dense_top_k)
@@ -67,11 +68,14 @@ class AdvancedAPipeline:
         # Step 2: Rerank — precision cut
         reranked = self.reranker.rerank(question, candidates, top_k=rerank_top_k)
 
-        # Step 3: Generate from reranked top-k
-        gen_result = self.generator.generate(question, reranked)
+        # Step 3: Slice to final_context_k before generation
+        context_chunks = reranked[:final_context_k]
 
-        # Step 4: Format citations
-        citations = format_citations(gen_result["answer"], reranked)
+        # Step 4: Generate from top context chunks
+        gen_result = self.generator.generate(question, context_chunks)
+
+        # Step 5: Format citations
+        citations = format_citations(gen_result["answer"], context_chunks)
 
         total_latency = (time.time() - t0) * 1000
 
@@ -82,7 +86,7 @@ class AdvancedAPipeline:
         result = {
             "answer": gen_result["answer"],
             "citations": citations,
-            "retrieved_chunks": reranked,
+            "retrieved_chunks": context_chunks,
             "all_candidates": candidates,      # full candidate set for inspection
             "context_used": gen_result.get("context_used", ""),
             "latency_ms": round(total_latency, 2),

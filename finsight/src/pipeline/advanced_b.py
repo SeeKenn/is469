@@ -12,7 +12,7 @@ Best of both worlds:
 import time
 from typing import Dict
 
-from src.retrieval.hybrid_retriever import HybridRetriever
+from src.retrieval.hybrid_retriever import HybridRetriever, _detect_fiscal_periods
 from src.retrieval.reranker import Reranker
 from src.generation.generator import Generator
 from src.generation.citation_formatter import format_citations
@@ -62,18 +62,44 @@ class AdvancedBPipeline:
         """
         t0 = time.time()
         rerank_top_k = self.cfg["retrieval"]["rerank_top_k"]
+        final_context_k = self.cfg["retrieval"]["final_context_k"]
 
-        # Step 1: Hybrid retrieval — BM25 + dense, fused by RRF
+        # Step 1: Hybrid retrieval — BM25 + dense + period-boost, fused by RRF
         candidates = self.retriever.retrieve(question)
 
         # Step 2: Rerank the merged candidates
         reranked = self.reranker.rerank(question, candidates, top_k=rerank_top_k)
 
-        # Step 3: Generate
-        gen_result = self.generator.generate(question, reranked)
+        # Step 3: Apply fiscal-period lock then slice to final_context_k.
+        #   For queries mentioning a specific year/quarter, guarantee that the
+        #   best-scored chunks FROM THAT PERIOD appear in the final context.
+        #   `rerank_top_k` is intentionally set larger than `final_context_k` so
+        #   period chunks ranked just outside the natural top-8 by cross-encoder
+        #   (e.g. numeric reconciliation tables) still have a chance here.
+        period_slots = int(self.cfg.get("retrieval", {}).get("period_guaranteed_slots", 3))
+        detected = _detect_fiscal_periods(question)
 
-        # Step 4: Citations
-        citations = format_citations(gen_result["answer"], reranked)
+        if detected and period_slots > 0:
+            period_chunks = [
+                c for c in reranked
+                if c["metadata"].get("fiscal_period", "") in detected
+            ]
+            guaranteed = period_chunks[:period_slots]
+            guaranteed_ids = {c["metadata"].get("chunk_id") for c in guaranteed}
+            remaining = [c for c in reranked if c["metadata"].get("chunk_id") not in guaranteed_ids]
+            context_chunks = (guaranteed + remaining)[: final_context_k]
+            logger.debug(
+                f"Period lock for {detected}: {len(guaranteed)}/{period_slots} guaranteed slots "
+                f"({len(period_chunks)} period chunks in reranked-{len(reranked)})"
+            )
+        else:
+            context_chunks = reranked[:final_context_k]
+
+        # Step 4: Generate
+        gen_result = self.generator.generate(question, context_chunks)
+
+        # Step 5: Citations
+        citations = format_citations(gen_result["answer"], context_chunks)
 
         total_latency = (time.time() - t0) * 1000
         top_rerank_score = reranked[0]["rerank_score"] if reranked else 0.0
@@ -86,7 +112,7 @@ class AdvancedBPipeline:
         result = {
             "answer": gen_result["answer"],
             "citations": citations,
-            "retrieved_chunks": reranked,
+            "retrieved_chunks": context_chunks,
             "all_candidates": candidates,
             "context_used": gen_result.get("context_used", ""),
             "latency_ms": round(total_latency, 2),

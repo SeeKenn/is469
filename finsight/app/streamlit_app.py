@@ -9,7 +9,11 @@ Run: streamlit run app/streamlit_app.py
 import sys
 import time
 import json
+import warnings
 from pathlib import Path
+
+# Suppress the harmless PyTorch/Streamlit path introspection warning
+warnings.filterwarnings("ignore", message=".*torch.classes.*")
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -172,7 +176,7 @@ def render_citation_card(cit: dict):
 
 
 def render_chunk_card(chunk: dict, idx: int):
-    """Render one retrieved chunk in the evidence panel."""
+    """Render one retrieved chunk in the evidence panel (no expander — safe inside parent expander)."""
     meta = chunk.get("metadata", {})
     score = chunk.get("rerank_score", chunk.get("score", 0))
     retriever = chunk.get("retriever", "")
@@ -184,9 +188,15 @@ def render_chunk_card(chunk: dict, idx: int):
     if found_by:
         score_label += f" | found_by: {found_by}"
 
-    with st.expander(f"Chunk {idx+1}: {meta.get('chunk_id', 'unknown')} | {source_label}", expanded=False):
-        st.caption(score_label)
-        st.text(text)
+    chunk_id = meta.get('chunk_id', 'unknown')
+    header = f"**Chunk {idx+1}:** `{chunk_id}` | {source_label}"
+    snippet = text[:200].replace('\n', ' ') + ("…" if len(text) > 200 else "")
+
+    st.markdown(f"""<div class="chunk-card">
+        <b>Chunk {idx+1}:</b> <code>{chunk_id}</code> | {source_label}<br>
+        <span class="score-badge">{score_label}</span>
+        <div class="citation-snippet">"{snippet}"</div>
+    </div>""", unsafe_allow_html=True)
 
 
 def variant_description(method: str) -> str:

@@ -45,8 +45,32 @@ MULTI_SPACE_PATTERN = re.compile(r"[ \t]{2,}")
 # Unicode non-breaking spaces, zero-width spaces, etc.
 UNICODE_JUNK_PATTERN = re.compile(r"[\u00a0\u200b\u200c\u200d\ufeff]")
 
-# Isolated single characters on their own line (OCR noise)
-ISOLATED_CHAR_PATTERN = re.compile(r"(?:^|\n)[^a-zA-Z0-9\n]{0,2}[a-zA-Z]{1}[^a-zA-Z0-9\n]{0,2}(?=\n|$)")
+# Pipe-table artifacts from pdfplumber (legacy data): "| | | 2,359 | | " → "2,359"
+PIPE_TABLE_PATTERN = re.compile(r"\s*\|\s*")   # used in clean_table_artifacts
+
+# Web-scraper timestamp headers inserted by pdfplumber on some PDFs
+# e.g. "3/3/26, 10:50 PM 20-F Table of Contents"
+SCRAPER_HEADER_PATTERN = re.compile(
+    r"\d{1,2}/\d{1,2}/\d{2,4},?\s*\d{1,2}:\d{2}\s*[AP]M\s*",
+    re.IGNORECASE,
+)
+
+
+def clean_table_artifacts(text: str) -> str:
+    """
+    Remove web-scraper timestamp headers and convert pipe-table rows to
+    space-delimited text so they embed meaningfully.
+    e.g. "Revenue | | | 2,359 | | | 1,433" → "Revenue  2,359  1,433"
+    """
+    text = SCRAPER_HEADER_PATTERN.sub("", text)
+    # Only apply pipe replacement on lines that look like table rows
+    # (lines with multiple | characters)
+    def _fix_pipe_line(m: re.Match) -> str:
+        line = m.group(0)
+        parts = [p.strip() for p in line.split("|") if p.strip()]
+        return "  ".join(parts) if parts else ""
+    text = re.sub(r"^[^\n]*\|[^\n]*$", _fix_pipe_line, text, flags=re.MULTILINE)
+    return text
 
 
 def remove_footers(text: str) -> str:
@@ -96,6 +120,7 @@ def clean_text(text: str) -> str:
     Full cleaning pipeline for a page or chunk of text.
     Apply in order — each step builds on the previous.
     """
+    text = clean_table_artifacts(text)
     text = remove_footers(text)
     text = remove_toc_lines(text)
     text = fix_hyphenation(text)

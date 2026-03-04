@@ -22,10 +22,11 @@ embeddings:
   normalize: true
 
 retrieval:
-  dense_top_k: 20
-  sparse_top_k: 20
-  rerank_top_k: 5
-  final_context_k: 5
+  dense_top_k: 25
+  sparse_top_k: 25
+  rerank_top_k: 35
+  final_context_k: 8
+  period_guaranteed_slots: 4   # guarantee ≥N context slots from detected fiscal period
   rrf_k: 60              # RRF constant — standard value, do not change without reason
   weak_evidence_threshold: 0.3   # Streamlit warning threshold
 
@@ -39,7 +40,9 @@ generation:
   base_url: http://localhost:8000/v1
   api_key: dummy
   temperature: 0.0
-  max_tokens: 800
+  max_tokens: 512
+  max_chunk_chars: 2500    # truncate each chunk at this many characters before sending to LLM
+  timeout_seconds: 120     # seconds before giving up on the LLM call
 
 
 

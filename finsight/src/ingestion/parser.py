@@ -71,13 +71,17 @@ def _extract_with_pymupdf(pdf_path: Path) -> List[Dict]:
 
 
 def _flatten_tables(tables: List) -> str:
-    """Convert pdfplumber table structures to plain text rows."""
+    """Convert pdfplumber table structures to clean, readable plain-text rows.
+    Skips empty cells so we don't produce '| | | 2,359 | | |' noise.
+    """
     lines = []
     for table in tables:
         for row in table:
-            if row:
-                cells = [str(c).strip() if c else "" for c in row]
-                lines.append(" | ".join(cells))
+            if not row:
+                continue
+            cells = [str(c).strip() for c in row if c and str(c).strip()]
+            if cells:  # skip completely empty rows
+                lines.append("  ".join(cells))
     return "\n".join(lines)
 
 

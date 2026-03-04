@@ -36,7 +36,7 @@ def _is_investment_advice_request(question: str, keywords: List[str]) -> bool:
     return any(kw.lower() in q_lower for kw in keywords)
 
 
-def format_context(chunks: List[Dict]) -> str:
+def format_context(chunks: List[Dict], max_chunk_chars: int = 1500) -> str:
     lines = []
     for i, chunk in enumerate(chunks, start=1):
         m = chunk.get("metadata", {})
@@ -48,7 +48,10 @@ def format_context(chunks: List[Dict]) -> str:
             f"Page: {m.get('page_number', '?')} | "
             f"File: {m.get('source_file', 'N/A')}"
         )
-        lines.append(f"{header}\n{chunk.get('text', '').strip()}")
+        text = chunk.get("text", "").strip()
+        if len(text) > max_chunk_chars:
+            text = text[:max_chunk_chars] + " ...[truncated]"
+        lines.append(f"{header}\n{text}")
     return "\n\n---\n\n".join(lines)
 
 
@@ -131,16 +134,26 @@ class OpenAIBackend:
     def __init__(self, cfg: dict):
         if not OPENAI_AVAILABLE:
             raise RuntimeError("openai not installed. Run: pip install openai")
-        api_key = os.getenv("OPENAI_API_KEY")
+        # Prefer api_key from config (e.g. "dummy" for local vLLM), fall back to env var
+        api_key = cfg["generation"].get("api_key") or os.getenv("OPENAI_API_KEY")
         if not api_key:
-            raise EnvironmentError("OPENAI_API_KEY not set. Add it to your .env file.")
-        self.client = OpenAI(api_key=api_key)
+            raise EnvironmentError(
+                "No API key found. Set 'api_key' in settings.yaml or OPENAI_API_KEY env var."
+            )
+        base_url = cfg["generation"].get("base_url")  # None → real OpenAI
+        timeout = cfg["generation"].get("timeout_seconds", 120)
+        self.client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
         self.model = cfg["generation"]["model"]
         self.temperature = cfg["generation"]["temperature"]
         self.max_tokens = cfg["generation"]["max_tokens"]
+        logger.info(
+            f"OpenAIBackend: base_url={base_url or 'api.openai.com'} "
+            f"model={self.model} timeout={timeout}s"
+        )
 
     def chat(self, system_prompt: str, user_prompt: str) -> Dict:
         t0 = time.time()
+        logger.info(f"OpenAIBackend: sending request to {self.client.base_url} model={self.model}")
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -208,7 +221,7 @@ class Generator:
         if not chunks:
             return self._no_context_response()
 
-        context = format_context(chunks)
+        context = format_context(chunks, max_chunk_chars=self.cfg["generation"].get("max_chunk_chars", 1500))
         system_prompt = self.prompts["qa_system"]
         user_prompt = self.prompts["qa_user"].format(context=context, question=question)
 

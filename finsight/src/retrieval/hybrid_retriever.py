@@ -6,10 +6,11 @@ Standard k=60 avoids large penalties for documents ranked in the top positions.
 """
 
 import json
+import re
 import time
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from src.retrieval.dense_retriever import DenseRetriever
 from src.retrieval.sparse_retriever import SparseRetriever
@@ -17,6 +18,39 @@ from src.utils.config_loader import load_config
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+# Mapping from year mention → fiscal_period metadata values to boost
+_FY_MAP = {
+    "2022": ["FY2022"],
+    "2023": ["FY2023"],
+    "2024": ["FY2024"],
+    "2025": ["Q1 2025", "Q2 2025", "Q3 2025", "Q4 2025"],
+    "q1 2025": ["Q1 2025"], "q2 2025": ["Q2 2025"],
+    "q3 2025": ["Q3 2025"], "q4 2025": ["Q4 2025"],
+    "q1 2024": ["Q1 2024"], "q2 2024": ["Q2 2024"],
+    "q3 2024": ["Q3 2024"], "q4 2024": ["Q4 2024"],
+}
+
+
+def _detect_fiscal_periods(query: str) -> List[str]:
+    """Return fiscal_period metadata values mentioned in the query."""
+    q = query.lower()
+    periods = []
+    # Full year mentions: FY2023, FY 2023, fiscal year 2023
+    for m in re.finditer(r'(?:fy\s*|fiscal\s+year\s*)(\d{4})', q):
+        key = m.group(1)
+        periods.extend(_FY_MAP.get(key, [f"FY{key}"]))
+    # Quarter mentions: Q3 2024, Q1 2025
+    for m in re.finditer(r'q([1-4])\s+(\d{4})', q):
+        key = f"q{m.group(1)} {m.group(2)}"
+        periods.extend(_FY_MAP.get(key, [f"Q{m.group(1)} {m.group(2)}"]))
+    # Bare year mentions when no FY prefix: "revenue in 2023"
+    if not periods:
+        for m in re.finditer(r'\b(20\d{2})\b', q):
+            key = m.group(1)
+            periods.extend(_FY_MAP.get(key, []))
+    return list(dict.fromkeys(periods))  # deduplicate, preserve order
 
 
 class HybridRetriever:
@@ -36,6 +70,11 @@ class HybridRetriever:
         Retrieve candidates from both dense and sparse retrievers,
         merge with RRF, return fused ranked list.
 
+        When the query mentions a specific fiscal year/quarter, injects a
+        targeted metadata-filtered dense search for that period so that
+        table-heavy chunks with poor embeddings are guaranteed to enter
+        the candidate pool.
+
         Returns:
             List of chunk dicts with 'rrf_score', 'retriever'='hybrid'
             Sorted by RRF score descending.
@@ -48,6 +87,20 @@ class HybridRetriever:
         # Get candidates from each retriever
         d_results = self.dense.retrieve(query, top_k=dense_top_k)
         s_results = self.sparse.retrieve(query, top_k=sparse_top_k)
+
+        # ── Fiscal-period boost ───────────────────────────────────────────
+        # When a specific year/quarter is mentioned, pull top-15 chunks
+        # from the matching fiscal period via Chroma metadata filter.
+        # These are assigned a guaranteed high RRF rank (rank 1) so they
+        # always enter the reranker candidate pool.
+        boost_results: List[Dict] = []
+        detected_periods = _detect_fiscal_periods(query)
+        if detected_periods:
+            boost_results = self._retrieve_by_period(query, detected_periods, top_k=15)
+            logger.debug(
+                f"HybridRetriever: period boost for {detected_periods} → "
+                f"{len(boost_results)} extra candidates"
+            )
 
         # RRF fusion
         rrf_scores: Dict[str, float] = {}
@@ -63,6 +116,13 @@ class HybridRetriever:
             rrf_scores[cid] = rrf_scores.get(cid, 0.0) + 1.0 / (self.k + rank)
             if cid not in chunk_map:
                 chunk_map[cid] = chunk  # prefer dense version if duplicate
+
+        # Inject boosted period chunks at rank=1 in an extra virtual list
+        for rank, chunk in enumerate(boost_results, start=1):
+            cid = chunk["metadata"].get("chunk_id", f"boost_{rank}")
+            rrf_scores[cid] = rrf_scores.get(cid, 0.0) + 1.0 / (self.k + rank)
+            if cid not in chunk_map:
+                chunk_map[cid] = chunk
 
         # Sort by RRF score
         sorted_ids = sorted(rrf_scores, key=rrf_scores.get, reverse=True)
@@ -118,3 +178,47 @@ class HybridRetriever:
         }
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
+
+    def _retrieve_by_period(
+        self, query: str, periods: List[str], top_k: int = 15
+    ) -> List[Dict]:
+        """
+        Run a Chroma dense retrieval restricted to the given fiscal_period(s).
+        Returns up to top_k chunks, tagged as retriever='period_boost'.
+        """
+        try:
+            normalize = self.cfg["embeddings"].get("normalize", True)
+            q_vec = self.dense.model.encode(
+                query, normalize_embeddings=normalize
+            ).tolist()
+
+            where_filter = (
+                {"fiscal_period": {"$in": periods}}
+                if len(periods) > 1
+                else {"fiscal_period": periods[0]}
+            )
+
+            results = self.dense.collection.query(
+                query_embeddings=[q_vec],
+                n_results=min(top_k, self.dense.collection.count()),
+                where=where_filter,
+                include=["documents", "metadatas", "distances"],
+            )
+
+            chunks = []
+            if results and results["documents"]:
+                for text, meta, dist in zip(
+                    results["documents"][0],
+                    results["metadatas"][0],
+                    results["distances"][0],
+                ):
+                    chunks.append({
+                        "text": text,
+                        "metadata": meta,
+                        "score": round(1.0 - float(dist), 6),
+                        "retriever": "period_boost",
+                    })
+            return chunks
+        except Exception as e:
+            logger.warning(f"Period boost failed for {periods}: {e}")
+            return []
