@@ -1,0 +1,142 @@
+[
+  {
+    "id": "q001",
+    "question": "What was Microsoft's total revenue for FY2024?",
+    "ground_truth": "Microsoft reported total revenue of $245.1 billion for FY2024 (fiscal year ended June 30, 2024), representing 16% year-over-year growth.",
+    "source_doc": "msft_10k_fy2024",
+    "category": "annual_financials"
+  },
+  {
+    "id": "q002",
+    "question": "What was Microsoft's total revenue for FY2023?",
+    "ground_truth": "Microsoft reported total revenue of $211.9 billion for FY2023 (fiscal year ended June 30, 2023), representing approximately 7% year-over-year growth.",
+    "source_doc": "msft_10k_fy2023",
+    "category": "annual_financials"
+  },
+  {
+    "id": "q003",
+    "question": "What was Microsoft's net income for FY2024?",
+    "ground_truth": "Microsoft's net income for FY2024 was $88.1 billion, up significantly from $72.4 billion in FY2023.",
+    "source_doc": "msft_10k_fy2024",
+    "category": "annual_financials"
+  },
+  {
+    "id": "q004",
+    "question": "What was Microsoft's operating income for FY2024?",
+    "ground_truth": "Microsoft's operating income for FY2024 was $109.4 billion, reflecting strong profitability across all three business segments.",
+    "source_doc": "msft_10k_fy2024",
+    "category": "annual_financials"
+  },
+  {
+    "id": "q005",
+    "question": "What was Microsoft's total revenue for FY2022?",
+    "ground_truth": "Microsoft reported total revenue of $198.3 billion for FY2022 (fiscal year ended June 30, 2022).",
+    "source_doc": "msft_10k_fy2022",
+    "category": "annual_financials"
+  },
+  {
+    "id": "q006",
+    "question": "What was Microsoft's revenue in Q1 FY2025?",
+    "ground_truth": "Microsoft reported revenue of $65.6 billion in Q1 FY2025 (quarter ended September 30, 2024), representing 16% year-over-year growth.",
+    "source_doc": "msft_10q_q1_fy2025",
+    "category": "quarterly_results"
+  },
+  {
+    "id": "q007",
+    "question": "What was Microsoft's revenue in Q2 FY2025?",
+    "ground_truth": "Microsoft reported revenue of $69.6 billion in Q2 FY2025 (quarter ended December 31, 2024), representing approximately 12% year-over-year growth.",
+    "source_doc": "msft_10q_q2_fy2025",
+    "category": "quarterly_results"
+  },
+  {
+    "id": "q008",
+    "question": "How much did Azure grow in Q1 FY2025?",
+    "ground_truth": "Azure and other cloud services grew approximately 33% in constant currency in Q1 FY2025 (quarter ended September 30, 2024), within the Intelligent Cloud segment.",
+    "source_doc": "msft_10q_q1_fy2025",
+    "category": "quarterly_results"
+  },
+  {
+    "id": "q009",
+    "question": "How much did Azure grow in Q2 FY2025?",
+    "ground_truth": "Azure and other cloud services grew approximately 31% in constant currency in Q2 FY2025 (quarter ended December 31, 2024).",
+    "source_doc": "msft_10q_q2_fy2025",
+    "category": "quarterly_results"
+  },
+  {
+    "id": "q010",
+    "question": "What was the Intelligent Cloud segment revenue in Q1 FY2025?",
+    "ground_truth": "Microsoft's Intelligent Cloud segment reported revenue of approximately $24.1 billion in Q1 FY2025, representing approximately 20% year-over-year growth, driven primarily by Azure.",
+    "source_doc": "msft_10q_q1_fy2025",
+    "category": "quarterly_results"
+  },
+  {
+    "id": "q011",
+    "question": "How did Microsoft's revenue grow from FY2022 to FY2024?",
+    "ground_truth": "Microsoft's revenue grew from $198.3 billion in FY2022 to $245.1 billion in FY2024, an increase of approximately $46.8 billion or about 24% over the two-year period.",
+    "source_doc": "msft_10k_fy2024",
+    "category": "multi_period_comparison"
+  },
+  {
+    "id": "q012",
+    "question": "How did Microsoft's operating income change from FY2022 to FY2024?",
+    "ground_truth": "Microsoft's operating income grew from $83.4 billion in FY2022 to $109.4 billion in FY2024, an increase of approximately $26 billion or 31% over two fiscal years, reflecting improving operating leverage.",
+    "source_doc": "msft_10k_fy2024",
+    "category": "multi_period_comparison"
+  },
+  {
+    "id": "q013",
+    "question": "How did Microsoft's net income compare in FY2023 versus FY2024?",
+    "ground_truth": "Microsoft's net income increased from $72.4 billion in FY2023 to $88.1 billion in FY2024, representing approximately 22% year-over-year growth.",
+    "source_doc": "msft_10k_fy2024",
+    "category": "multi_period_comparison"
+  },
+  {
+    "id": "q014",
+    "question": "How did the Intelligent Cloud segment revenue trend from FY2022 to FY2024?",
+    "ground_truth": "The Intelligent Cloud segment revenue grew from approximately $75.3 billion in FY2022 to $87.9 billion in FY2023 and $105.4 billion in FY2024, showing consistent double-digit growth driven by Azure adoption.",
+    "source_doc": "msft_10k_fy2024",
+    "category": "multi_period_comparison"
+  },
+  {
+    "id": "q015",
+    "question": "How did Microsoft's quarterly revenue progress from Q1 to Q2 FY2025?",
+    "ground_truth": "Microsoft's revenue grew from $65.6 billion in Q1 FY2025 (September 2024 quarter) to $69.6 billion in Q2 FY2025 (December 2024 quarter), an increase of approximately $4 billion quarter-over-quarter.",
+    "source_doc": "msft_10q_q2_fy2025",
+    "category": "multi_period_comparison"
+  },
+  {
+    "id": "q016",
+    "question": "What are the three main business segments of Microsoft?",
+    "ground_truth": "Microsoft operates through three business segments: (1) Productivity and Business Processes (Office, Teams, LinkedIn, Dynamics), (2) Intelligent Cloud (Azure, SQL Server, Windows Server, GitHub), and (3) More Personal Computing (Windows OEM, Xbox, Surface, Bing/Search advertising).",
+    "source_doc": "msft_10k_fy2024",
+    "category": "business_segments"
+  },
+  {
+    "id": "q017",
+    "question": "What was the Productivity and Business Processes segment revenue in FY2024?",
+    "ground_truth": "Microsoft's Productivity and Business Processes segment reported revenue of $77.7 billion in FY2024, which includes Office Commercial, Office Consumer, LinkedIn, and Dynamics products.",
+    "source_doc": "msft_10k_fy2024",
+    "category": "business_segments"
+  },
+  {
+    "id": "q018",
+    "question": "What was the Intelligent Cloud segment revenue in FY2024?",
+    "ground_truth": "Microsoft's Intelligent Cloud segment reported revenue of $105.4 billion in FY2024, making it the largest segment by revenue, driven by Azure cloud services growth.",
+    "source_doc": "msft_10k_fy2024",
+    "category": "business_segments"
+  },
+  {
+    "id": "q019",
+    "question": "What was the More Personal Computing segment revenue in FY2024?",
+    "ground_truth": "Microsoft's More Personal Computing segment reported revenue of $62.0 billion in FY2024, which includes Windows OEM licensing, Xbox hardware and content, Surface devices, and Bing search advertising.",
+    "source_doc": "msft_10k_fy2024",
+    "category": "business_segments"
+  },
+  {
+    "id": "q020",
+    "question": "What products are included in Microsoft's Intelligent Cloud segment?",
+    "ground_truth": "Microsoft's Intelligent Cloud segment includes Azure and other cloud services, SQL Server, Windows Server, Visual Studio, GitHub, and enterprise services. Azure is the primary growth driver within this segment.",
+    "source_doc": "msft_10k_fy2024",
+    "category": "business_segments"
+  }
+]

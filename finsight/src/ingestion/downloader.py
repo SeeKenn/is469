@@ -1,6 +1,6 @@
 """
 downloader.py
-Downloads Grab PDF filings from configured URLs to data/raw/.
+Downloads Microsoft SEC filing PDFs from configured URLs to data/raw/.
 Skips files that already exist (idempotent).
 """
 
@@ -48,8 +48,8 @@ def download_document(doc: dict, raw_dir: Path, force: bool = False) -> dict:
         logger.error("requests library not available — cannot download")
         return {"filename": filename, "status": "error", "path": None, "error": "requests not installed"}
 
-    if not url or url.startswith("https://ir.grab.com"):
-        # Placeholder URL — team must replace with real direct PDF links
+    if not url or url.startswith("https://investor.microsoft.com"):
+        # Landing page URL — direct PDF links must be used instead
         logger.warning(
             f"[MANUAL] {filename} — URL '{url}' is a landing page, not a direct PDF link.\n"
             f"  Please download manually from {url} and place at {dest}"

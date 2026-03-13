@@ -78,7 +78,7 @@ def _clean_for_reranking(text: str) -> str:
     if _EBITDA_PAT.search(text) and _LOSS_EBITDA_PAT.search(text):
         hint = "Financial reconciliation table showing Adjusted EBITDA and Total Segment Adjusted EBITDA by year. "
     elif _REVENUE_TABLE_PAT.search(text):
-        hint = "Financial table showing annual revenue figures by segment. "
+        hint = "Financial table showing total revenue and key financial metrics. "
     if hint:
         text = hint + text
 

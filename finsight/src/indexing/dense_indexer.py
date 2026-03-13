@@ -111,6 +111,15 @@ class DenseIndexer:
             batch = chunks[batch_start: batch_start + batch_size]
             texts = [c["text"] for c in batch]
             ids = [c["metadata"]["chunk_id"] for c in batch]
+
+            # Create metadata-augmented text for embedding (improves retrieval
+            # by letting the embedding model see doc_type and fiscal_period)
+            embed_texts = []
+            for c in batch:
+                m = c.get("metadata", {})
+                prefix = f"[{m.get('company', '')} | {m.get('doc_type', '')} | {m.get('fiscal_period', '')}] "
+                embed_texts.append(prefix + c["text"])
+
             metadatas = []
             for c in batch:
                 # ChromaDB metadata values must be str, int, float, or bool
@@ -125,7 +134,7 @@ class DenseIndexer:
                 metadatas.append(meta)
 
             embeddings = self.model.encode(
-                texts,
+                embed_texts,
                 normalize_embeddings=normalize,
                 show_progress_bar=False,
             ).tolist()

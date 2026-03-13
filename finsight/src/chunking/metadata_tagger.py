@@ -18,9 +18,9 @@ logger = get_logger(__name__)
 # Reference for all consumers (indexer, retriever, app)
 METADATA_SCHEMA = {
     "chunk_id": "str — unique identifier: {company}_{doctype}_{period}_p{page}_c{chunk}",
-    "company": "str — always 'Grab Holdings'",
-    "ticker": "str — 'GRAB'",
-    "doc_type": "str — enum: 20-F, 6-K, earnings_pr, investor_deck, earnings_deck",
+    "company": "str — always 'Microsoft Corporation'",
+    "ticker": "str — 'MSFT'",
+    "doc_type": "str — enum: 10-K, 10-Q",
     "source_file": "str — filename in data/raw/",
     "source_url": "str — official URL",
     "filing_date": "str — ISO 8601 YYYY-MM-DD",
@@ -92,8 +92,8 @@ def tag_chunk(
 
     metadata = {
         "chunk_id": chunk_id,
-        "company": doc_config.get("company", "Grab Holdings"),
-        "ticker": doc_config.get("ticker", "GRAB"),
+        "company": doc_config.get("company", "Microsoft Corporation"),
+        "ticker": doc_config.get("ticker", "MSFT"),
         "doc_type": doc_config.get("doc_type", "unknown"),
         "source_file": doc_config.get("filename", ""),
         "source_url": doc_config.get("source_url", ""),

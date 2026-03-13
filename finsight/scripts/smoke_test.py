@@ -93,11 +93,11 @@ print("\n[5] Chunker Unit Test")
 def test_chunker():
     from src.chunking.chunker import chunk_text
     sample = (
-        "Grab Holdings reported revenue of USD 2.36 billion in FY2023. "
-        "This represents a 65% increase year-over-year. "
-        "The Deliveries segment was the largest contributor. "
-        "Adjusted EBITDA turned positive for the first time in company history. "
-        "Management expects continued margin improvement in 2024. " * 20
+        "Microsoft Corporation reported total revenue of $245.1 billion in FY2024. "
+        "This represents a 16% increase year-over-year. "
+        "The Intelligent Cloud segment was the largest growth contributor. "
+        "Azure and other cloud services grew 29% during the fiscal year. "
+        "Management expects continued cloud growth in FY2025. " * 20
     )
     cfg = {"strategy": "fixed_token", "chunk_size": 128, "chunk_overlap": 20,
            "tokenizer": "cl100k_base", "min_chunk_tokens": 30, "respect_sentence_boundaries": True}
@@ -114,18 +114,18 @@ print("\n[6] Metadata Tagger Unit Test")
 def test_tagger():
     from src.chunking.metadata_tagger import tag_document_chunks, validate_chunk_metadata
     fake_chunks = [
-        {"text": "Grab total revenue FY2023 was USD 2.36B.", "page_number": 5,
+        {"text": "Microsoft total revenue FY2024 was $245.1B.", "page_number": 5,
          "chunk_index": 0, "token_count": 18, "global_chunk_index": 0}
     ]
     doc_cfg = {
-        "id": "test_doc", "company": "Grab Holdings", "ticker": "GRAB",
-        "doc_type": "20-F", "fiscal_period": "FY2023", "filing_date": "2024-03-15",
+        "id": "test_doc", "company": "Microsoft Corporation", "ticker": "MSFT",
+        "doc_type": "10-K", "fiscal_period": "FY2024", "filing_date": "2024-07-30",
         "filename": "test.pdf", "source_url": "https://example.com"
     }
     tagged = tag_document_chunks(fake_chunks, doc_cfg)
     assert len(tagged) == 1
     meta = tagged[0]["metadata"]
-    assert meta["company"] == "Grab Holdings"
+    assert meta["company"] == "Microsoft Corporation"
     assert meta["chunk_id"].startswith("test_doc")
     issues = validate_chunk_metadata(tagged[0])
     assert not issues, f"Unexpected issues: {issues}"
@@ -138,18 +138,18 @@ print("\n[7] Citation Formatter Unit Test")
 
 def test_citations():
     from src.generation.citation_formatter import format_citations, extract_citation_refs
-    answer = "Grab revenue was USD 2.36B [Doc-1]. EBITDA turned positive [Doc-2]."
+    answer = "Microsoft revenue was $245.1B in FY2024 [Doc-1]. Azure grew 29% [Doc-2]."
     refs = extract_citation_refs(answer)
     assert refs == [1, 2], f"Expected [1,2], got {refs}"
     chunks = [
-        {"text": "Revenue was USD 2.36B in FY2023.", "metadata": {
-            "doc_type": "20-F", "fiscal_period": "FY2023", "filing_date": "2024-03-15",
-            "page_number": 42, "source_file": "grab_20f.pdf", "source_url": "https://x.com",
+        {"text": "Revenue was $245.1B in FY2024.", "metadata": {
+            "doc_type": "10-K", "fiscal_period": "FY2024", "filing_date": "2024-07-30",
+            "page_number": 42, "source_file": "msft_10k_fy2024.pdf", "source_url": "https://x.com",
             "section_title": "Financial Results", "chunk_id": "test_p0042_c0001"
         }, "score": 0.85},
-        {"text": "Adjusted EBITDA was positive for the first time.", "metadata": {
-            "doc_type": "20-F", "fiscal_period": "FY2023", "filing_date": "2024-03-15",
-            "page_number": 43, "source_file": "grab_20f.pdf", "source_url": "https://x.com",
+        {"text": "Azure and other cloud services grew 29%.", "metadata": {
+            "doc_type": "10-K", "fiscal_period": "FY2024", "filing_date": "2024-07-30",
+            "page_number": 43, "source_file": "msft_10k_fy2024.pdf", "source_url": "https://x.com",
             "section_title": None, "chunk_id": "test_p0043_c0001"
         }, "score": 0.80},
     ]
@@ -197,11 +197,11 @@ def check_corpus():
     present = [d for d in docs if (raw_dir / d["filename"]).exists()]
     if not present:
         raise FileNotFoundError(
-            f"No PDFs found in {raw_dir}. Download Grab filings and place them there."
+            f"No PDFs found in {raw_dir}. Download Microsoft filings and place them there."
         )
     return f"({len(present)}/{len(docs)} documents present)"
 
-warn("Grab PDF files present", check_corpus)
+warn("Microsoft PDF files present", check_corpus)
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 print(f"\n{'='*50}")

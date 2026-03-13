@@ -31,9 +31,30 @@ except ImportError:
     REQUESTS_AVAILABLE = False
 
 
+_OUT_OF_SCOPE_RESPONSE = (
+    "I can only answer questions about Microsoft Corporation financial "
+    "performance, business segments, and strategy. Please ask a "
+    "relevant question."
+)
+
+_CITATION_SYSTEM_ADDENDUM = (
+    "\n\nYou must cite the source document for every factual claim using "
+    "[Source: document_name] format. If the context does not contain "
+    "enough information to answer, say 'The provided documents do not "
+    "contain sufficient information to answer this question' rather "
+    "than guessing."
+)
+
+
 def _is_investment_advice_request(question: str, keywords: List[str]) -> bool:
     q_lower = question.lower()
     return any(kw.lower() in q_lower for kw in keywords)
+
+
+def _is_out_of_scope(question: str, allowed_topics: List[str]) -> bool:
+    """Check if the question is related to any allowed topic."""
+    q_lower = question.lower()
+    return not any(topic.lower() in q_lower for topic in allowed_topics)
 
 
 def format_context(chunks: List[Dict], max_chunk_chars: int = 1500) -> str:
@@ -215,14 +236,29 @@ class Generator:
             )
 
     def generate(self, question: str, chunks: List[Dict]) -> Dict:
+        guardrails = self.cfg.get("guardrails", {})
+
+        # Guardrail 1: Investment advice check (existing)
         invest_keywords = self.prompts.get("investment_advice_keywords", [])
         if _is_investment_advice_request(question, invest_keywords):
             return self._investment_advice_refusal()
+
+        # Guardrail 2: Out-of-scope check
+        if guardrails.get("out_of_scope_check", False):
+            allowed_topics = guardrails.get("allowed_topics", [])
+            if allowed_topics and _is_out_of_scope(question, allowed_topics):
+                return self._out_of_scope_response()
+
         if not chunks:
             return self._no_context_response()
 
         context = format_context(chunks, max_chunk_chars=self.cfg["generation"].get("max_chunk_chars", 1500))
         system_prompt = self.prompts["qa_system"]
+
+        # Guardrail 3: Append citation requirement to system prompt
+        if guardrails.get("require_citations", False):
+            system_prompt = system_prompt + _CITATION_SYSTEM_ADDENDUM
+
         user_prompt = self.prompts["qa_user"].format(context=context, question=question)
 
         raw = self._backend.chat(system_prompt, user_prompt)
@@ -255,6 +291,17 @@ class Generator:
             "input_tokens": 0, "output_tokens": 0, "total_tokens": 0,
             "latency_ms": 0.0, "context_used": "",
             "insufficient_evidence": False, "refused_investment_advice": True, "error": None,
+        }
+
+    def _out_of_scope_response(self) -> Dict:
+        model = getattr(self._backend, "model", "local")
+        return {
+            "answer": _OUT_OF_SCOPE_RESPONSE,
+            "raw_response": _OUT_OF_SCOPE_RESPONSE,
+            "model": model,
+            "input_tokens": 0, "output_tokens": 0, "total_tokens": 0,
+            "latency_ms": 0.0, "context_used": "",
+            "insufficient_evidence": False, "out_of_scope": True, "error": None,
         }
 
     def _no_context_response(self) -> Dict:

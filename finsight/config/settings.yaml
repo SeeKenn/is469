@@ -3,8 +3,8 @@
 
 project:
   name: FinSight
-  company: Grab Holdings
-  ticker: GRAB
+  company: Microsoft Corporation
+  ticker: MSFT
   seed: 42
 
 paths:
@@ -22,13 +22,15 @@ embeddings:
   normalize: true
 
 retrieval:
+  mode: advanced            # "baseline" = dense-only (no rerank), "advanced" = hybrid RRF + reranker
+  baseline_top_k: 5         # top-k for baseline mode (dense-only, no reranker)
   dense_top_k: 25
   sparse_top_k: 25
   rerank_top_k: 35
-  final_context_k: 8
-  period_guaranteed_slots: 4   # guarantee ≥N context slots from detected fiscal period
-  rrf_k: 60              # RRF constant — standard value, do not change without reason
-  weak_evidence_threshold: 0.3   # Streamlit warning threshold
+  final_context_k: 12
+  period_guaranteed_slots: 6   # guarantee >=N context slots from detected fiscal period
+  rrf_k: 60              # RRF constant — do not change without reason
+  weak_evidence_threshold: 0.3
 
 reranker:
   model: cross-encoder/ms-marco-MiniLM-L-6-v2
@@ -41,103 +43,193 @@ generation:
   api_key: dummy
   temperature: 0.0
   max_tokens: 512
-  max_chunk_chars: 2500    # truncate each chunk at this many characters before sending to LLM
-  timeout_seconds: 120     # seconds before giving up on the LLM call
+  max_chunk_chars: 2500
+  timeout_seconds: 120
 
-
+guardrails:
+  out_of_scope_check: true
+  require_citations: true
+  weak_evidence_warning: true
+  allowed_topics:
+    # Company identifiers
+    - microsoft
+    - msft
+    # Products & services
+    - azure
+    - cloud
+    - office
+    - teams
+    - windows
+    - surface
+    - xbox
+    - linkedin
+    - github
+    - copilot
+    - bing
+    - dynamics
+    - nuance
+    - activision
+    # Financial metrics
+    - revenue
+    - ebitda
+    - operating income
+    - net income
+    - gross margin
+    - profit
+    - loss
+    - earnings
+    - eps
+    - dividend
+    - cash flow
+    - cash
+    - debt
+    - equity
+    - margin
+    - tax
+    - expense
+    - cost
+    - asset
+    - liabil
+    - balance sheet
+    - income statement
+    # Business segments & topics
+    - segment
+    - productivity
+    - intelligent cloud
+    - personal computing
+    - more personal
+    - strategy
+    - business
+    - competition
+    - competitive
+    - growth
+    - market
+    - customer
+    - partner
+    - employee
+    - headcount
+    - research
+    - development
+    - acquisition
+    # Filing types & periods
+    - 10-k
+    - 10-q
+    - 10k
+    - 10q
+    - annual report
+    - quarterly report
+    - filing
+    - fiscal
+    - fy20
+    - fy19
+    - quarter
+    - quarterly
+    - annual
+    # Disclosure topics
+    - risk
+    - factor
+    - disclosed
+    - disclosure
+    - reported
+    - regulatory
+    - regulation
+    - compliance
+    - litigation
+    - legal
+    - outlook
+    - guidance
+    - forecast
+    - cybersecurity
+    - ai
+    - artificial intelligence
 
 chroma:
-  collection_name: grab_filings
+  collection_name: msft_filings
   distance_function: cosine
 
-# Document registry — updated to match actual files in data/raw/
+# Document registry
+# Microsoft fiscal year ends June 30. Q1=Jul-Sep, Q2=Oct-Dec, Q3=Jan-Mar, Q4=Apr-Jun
+# Download PDFs from SEC EDGAR: https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=789019
+# or Microsoft IR: https://investor.microsoft.com/sec-filings
+# Place downloaded PDFs in data/raw/ using the filenames below.
 documents:
-  - id: grab_20f_fy2022
-    filename: grab_20f_fy2022.pdf
-    doc_type: "20-F"
+  - id: msft_10k_fy2022
+    filename: msft_10k_fy2022.pdf
+    doc_type: "10-K"
     fiscal_period: "FY2022"
-    filing_date: "2023-04-06"
-    source_url: "https://ir.grab.com/sec-filings/annual-reports"
-    company: "Grab Holdings"
-    ticker: "GRAB"
+    filing_date: "2022-07-28"
+    source_url: "https://investor.microsoft.com/sec-filings/annual-reports"
+    company: "Microsoft Corporation"
+    ticker: "MSFT"
 
-  - id: grab_20f_fy2023
-    filename: grab_20f_fy2023.pdf
-    doc_type: "20-F"
+  - id: msft_10k_fy2023
+    filename: msft_10k_fy2023.pdf
+    doc_type: "10-K"
     fiscal_period: "FY2023"
-    filing_date: "2024-03-15"
-    source_url: "https://ir.grab.com/sec-filings/annual-reports"
-    company: "Grab Holdings"
-    ticker: "GRAB"
+    filing_date: "2023-07-27"
+    source_url: "https://investor.microsoft.com/sec-filings/annual-reports"
+    company: "Microsoft Corporation"
+    ticker: "MSFT"
 
-  - id: grab_20f_fy2024
-    filename: grab_20f_fy2024.pdf
-    doc_type: "20-F"
+  - id: msft_10k_fy2024
+    filename: msft_10k_fy2024.pdf
+    doc_type: "10-K"
     fiscal_period: "FY2024"
-    filing_date: "2025-03-15"
-    source_url: "https://ir.grab.com/sec-filings/annual-reports"
-    company: "Grab Holdings"
-    ticker: "GRAB"
+    filing_date: "2024-07-30"
+    source_url: "https://investor.microsoft.com/sec-filings/annual-reports"
+    company: "Microsoft Corporation"
+    ticker: "MSFT"
 
-  - id: grab_6k_q1_2025
-    filename: grab_6k_q1_2025.pdf
-    doc_type: "6-K"
-    fiscal_period: "Q1 2025"
-    filing_date: "2025-05-22"
-    source_url: "https://ir.grab.com/sec-filings/all-sec-filings"
-    company: "Grab Holdings"
-    ticker: "GRAB"
+  - id: msft_10k_fy2025
+    filename: msft_10k_fy2025.pdf
+    doc_type: "10-K"
+    fiscal_period: "FY2025"
+    filing_date: "2025-07-30"
+    source_url: "https://investor.microsoft.com/sec-filings/annual-reports"
+    company: "Microsoft Corporation"
+    ticker: "MSFT"
 
-  - id: grab_6k_q2_2025
-    filename: grab_6k_q2_2025.pdf
-    doc_type: "6-K"
-    fiscal_period: "Q2 2025"
-    filing_date: "2025-08-21"
-    source_url: "https://ir.grab.com/sec-filings/all-sec-filings"
-    company: "Grab Holdings"
-    ticker: "GRAB"
+  - id: msft_10q_q1_fy2025
+    filename: msft_10q_q1_fy2025.pdf
+    doc_type: "10-Q"
+    fiscal_period: "Q1 FY2025"
+    filing_date: "2024-10-29"
+    source_url: "https://investor.microsoft.com/sec-filings/quarterly-reports"
+    company: "Microsoft Corporation"
+    ticker: "MSFT"
 
-  - id: grab_6k_q3_2025
-    filename: grab_6k_q3_2025.pdf
-    doc_type: "6-K"
-    fiscal_period: "Q3 2025"
-    filing_date: "2025-11-13"
-    source_url: "https://ir.grab.com/sec-filings/all-sec-filings"
-    company: "Grab Holdings"
-    ticker: "GRAB"
+  - id: msft_10q_q2_fy2025
+    filename: msft_10q_q2_fy2025.pdf
+    doc_type: "10-Q"
+    fiscal_period: "Q2 FY2025"
+    filing_date: "2025-01-29"
+    source_url: "https://investor.microsoft.com/sec-filings/quarterly-reports"
+    company: "Microsoft Corporation"
+    ticker: "MSFT"
 
-  - id: grab_6k_q4_2025
-    filename: grab_6k_q4_2025.pdf
-    doc_type: "6-K"
-    fiscal_period: "Q4 2025"
-    filing_date: "2026-02-26"
-    source_url: "https://ir.grab.com/sec-filings/all-sec-filings"
-    company: "Grab Holdings"
-    ticker: "GRAB"
+  - id: msft_10q_q3_fy2025
+    filename: msft_10q_q3_fy2025.pdf
+    doc_type: "10-Q"
+    fiscal_period: "Q3 FY2025"
+    filing_date: "2025-04-29"
+    source_url: "https://investor.microsoft.com/sec-filings/quarterly-reports"
+    company: "Microsoft Corporation"
+    ticker: "MSFT"
 
-  - id: grab_earnings_deck_q2_2025
-    filename: grab_earnings_deck_q2_2025.pdf
-    doc_type: "earnings_deck"
-    fiscal_period: "Q2 2025"
-    filing_date: "2025-08-21"
-    source_url: "https://ir.grab.com/events-and-presentations"
-    company: "Grab Holdings"
-    ticker: "GRAB"
+  - id: msft_10q_q1_fy2026
+    filename: msft_10q_q1_fy2026.pdf
+    doc_type: "10-Q"
+    fiscal_period: "Q1 FY2026"
+    filing_date: "2025-10-29"
+    source_url: "https://investor.microsoft.com/sec-filings/quarterly-reports"
+    company: "Microsoft Corporation"
+    ticker: "MSFT"
 
-  - id: grab_earnings_deck_q3_2025
-    filename: grab_earnings_deck_q3_2025.pdf
-    doc_type: "earnings_deck"
-    fiscal_period: "Q3 2025"
-    filing_date: "2025-11-13"
-    source_url: "https://ir.grab.com/events-and-presentations"
-    company: "Grab Holdings"
-    ticker: "GRAB"
-
-  - id: grab_earnings_deck_q4_2025
-    filename: grab_earnings_deck_q4_2025.pdf
-    doc_type: "earnings_deck"
-    fiscal_period: "Q4 2025"
-    filing_date: "2026-02-26"
-    source_url: "https://ir.grab.com/events-and-presentations"
-    company: "Grab Holdings"
-    ticker: "GRAB"
+  - id: msft_10q_q2_fy2026
+    filename: msft_10q_q2_fy2026.pdf
+    doc_type: "10-Q"
+    fiscal_period: "Q2 FY2026"
+    filing_date: "2026-01-29"
+    source_url: "https://investor.microsoft.com/sec-filings/quarterly-reports"
+    company: "Microsoft Corporation"
+    ticker: "MSFT"

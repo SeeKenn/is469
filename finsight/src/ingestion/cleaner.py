@@ -1,6 +1,6 @@
 """
 cleaner.py
-Text cleaning utilities for Grab financial filings.
+Text cleaning utilities for Microsoft financial filings.
 Removes headers/footers, normalises whitespace, strips boilerplate legal text.
 All functions are pure (str -> str) and independently testable.
 """
@@ -12,16 +12,16 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# ── Patterns specific to Grab filings ─────────────────────────────────────────
+# ── Patterns specific to Microsoft filings ────────────────────────────────────
 
-# Common footer patterns seen in 20-F / 6-K filings
+# Common footer patterns seen in 10-K / 10-Q filings
 FOOTER_PATTERNS = [
-    r"Grab Holdings Limited\s*\|?\s*(?:Annual Report|Form 20-F|Form 6-K)[^\n]*\d{4}",
+    r"Microsoft Corporation\s*\|?\s*(?:Annual Report|Form 10-K|Form 10-Q)[^\n]*\d{4}",
     r"CONFIDENTIAL[^\n]*PAGE\s+\d+",
     r"(?:Page\s+)?\d+\s+of\s+\d+\s+pages?",
-    r"Copyright\s+©?\s*\d{4}\s+Grab(?:\s+Holdings)?[^\n]*",
+    r"Copyright\s+©?\s*\d{4}\s+Microsoft(?:\s+Corporation)?[^\n]*",
     r"This\s+(?:document|presentation|report)\s+contains\s+forward[- ]looking\s+statements[^\n]*",
-    r"GRAB HOLDINGS LIMITED[^\n]*EDGAR[^\n]*",
+    r"MICROSOFT CORPORATION[^\n]*EDGAR[^\n]*",
 ]
 
 # Table of contents entries (page reference lines) — remove these
@@ -29,7 +29,7 @@ TOC_LINE_PATTERN = re.compile(r"^[A-Z][^\n]{5,80}\.{3,}\s*\d{1,4}\s*$", re.MULTI
 
 # Repeated header lines that appear on every page
 RUNNING_HEADER_PATTERN = re.compile(
-    r"(?:^|\n)(?:Grab Holdings|GRAB HOLDINGS)[^\n]{0,60}\n",
+    r"(?:^|\n)(?:Microsoft Corporation|MICROSOFT CORPORATION)[^\n]{0,60}\n",
     re.IGNORECASE,
 )
 
@@ -74,7 +74,7 @@ def clean_table_artifacts(text: str) -> str:
 
 
 def remove_footers(text: str) -> str:
-    """Remove known Grab filing footer / header boilerplate."""
+    """Remove known Microsoft filing footer / header boilerplate."""
     for pat in FOOTER_PATTERNS:
         text = re.sub(pat, " ", text, flags=re.IGNORECASE | re.DOTALL)
     return text

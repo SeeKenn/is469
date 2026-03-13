@@ -71,11 +71,14 @@ class SparseIndexer:
 
         for chunk in chunks:
             text = chunk.get("text", "")
-            tokens = tokenize(text)
+            meta = chunk.get("metadata", {})
+            # Prepend metadata so BM25 can match on doc_type and fiscal_period
+            search_prefix = f"{meta.get('company', '')} {meta.get('doc_type', '')} {meta.get('fiscal_period', '')}"
+            tokens = tokenize(search_prefix + " " + text)
             tokenized_corpus.append(tokens)
             corpus_records.append({
                 "text": text,
-                "metadata": chunk.get("metadata", {}),
+                "metadata": meta,
                 "chunk_id": chunk.get("chunk_id", ""),
             })
 

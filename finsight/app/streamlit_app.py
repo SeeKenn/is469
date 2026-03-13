@@ -1,6 +1,6 @@
 """
 streamlit_app.py
-FinSight — Grab Holdings Financial Filings QA Assistant
+FinSight — Microsoft Corporation Financial Filings QA Assistant
 Full Streamlit application with all three pipeline variants.
 
 Run: streamlit run app/streamlit_app.py
@@ -22,7 +22,7 @@ import streamlit as st
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="FinSight — Grab Holdings",
+    page_title="FinSight — Microsoft Corporation",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -241,11 +241,11 @@ with st.sidebar:
     # Example questions
     st.markdown("### 💡 Example Questions")
     example_questions = [
-        "What was Grab's total revenue for FY2023?",
-        "How did adjusted EBITDA change from FY2022 to FY2023?",
-        "What are the top regulatory risks disclosed in the FY2023 20-F?",
-        "What guidance did management give for FY2024 GMV?",
-        "How did the Deliveries GMV grow in Q3 2024 vs Q3 2023?",
+        "What was Microsoft's total revenue for FY2024?",
+        "How did Azure grow from FY2023 to FY2024?",
+        "What are the top risk factors disclosed in the FY2024 10-K?",
+        "What guidance did management give for FY2025 cloud growth?",
+        "How did the Intelligent Cloud segment perform in Q1 FY2025?",
     ]
     selected_example = st.selectbox("Load an example:", ["— select —"] + example_questions)
 
@@ -253,7 +253,7 @@ with st.sidebar:
     st.markdown(
         '<div class="disclaimer">⚠️ For research purposes only.<br>'
         'This tool does not constitute financial advice.<br>'
-        'All answers sourced from official Grab Holdings filings only.</div>',
+        'All answers sourced from official Microsoft SEC filings only.</div>',
         unsafe_allow_html=True,
     )
 
@@ -262,18 +262,25 @@ with st.sidebar:
 
 st.markdown('<div class="main-header">📊 FinSight</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="sub-header">Grab Holdings Financial Filings Q&A — '
-    'Answers sourced exclusively from official 20-F, 6-K, and investor presentation documents.</div>',
+    '<div class="sub-header">Microsoft Corporation Financial Filings Q&A — '
+    'Answers sourced exclusively from official 10-K, 10-Q, and earnings presentation documents.</div>',
     unsafe_allow_html=True,
 )
 
-# Question input — pre-fill from example selector
-default_q = selected_example if selected_example != "— select —" else ""
+# Question input — pre-fill from sidebar example selector or sample buttons
+# Use a staging key (_pending_question) so we never write to the widget key
+# after it has already been instantiated in the same script run.
+if "question_input" not in st.session_state:
+    st.session_state["question_input"] = ""
+if "_pending_question" in st.session_state:
+    st.session_state["question_input"] = st.session_state.pop("_pending_question")
+if selected_example != "— select —":
+    st.session_state["question_input"] = selected_example
+
 question = st.text_area(
-    "Ask a question about Grab Holdings:",
-    value=default_q,
+    "Ask a question about Microsoft Corporation:",
     height=90,
-    placeholder="e.g. What was Grab's total revenue in FY2023? What are the key risks in the 20-F?",
+    placeholder="e.g. What was Microsoft's total revenue in FY2024? How did Azure grow in Q1 FY2025?",
     key="question_input",
 )
 
@@ -313,6 +320,7 @@ if submit and question.strip():
     # ── Evidence confidence check ─────────────────────────────────────────────
     from src.utils.config_loader import load_config
     cfg = load_config()
+    guardrails = cfg.get("guardrails", {})
     threshold = cfg["retrieval"].get("weak_evidence_threshold", 0.3)
 
     chunks = result.get("retrieved_chunks", [])
@@ -321,16 +329,19 @@ if submit and question.strip():
         default=0.0,
     )
 
-    if result.get("insufficient_evidence"):
+    if result.get("out_of_scope"):
+        st.warning(
+            "⚠️ **Out of scope**: This question does not appear to be about "
+            "Microsoft Corporation financials."
+        )
+    elif result.get("insufficient_evidence"):
         st.warning(
             "⚠️ **Insufficient evidence**: The system could not find strong supporting "
-            "evidence in the Grab filings for this question."
+            "evidence in the Microsoft filings for this question."
         )
-    elif max_score < threshold:
+    elif guardrails.get("weak_evidence_warning", True) and max_score < threshold:
         st.warning(
-            f"⚠️ **Low confidence** (top evidence score: {max_score:.3f} < {threshold}): "
-            "Retrieved evidence may not directly address this question. "
-            "Review the citations carefully."
+            "⚠️ Low confidence — retrieved evidence may not fully support this answer."
         )
 
     if result.get("error"):
@@ -406,24 +417,24 @@ elif submit and not question.strip():
 # ── Empty state ───────────────────────────────────────────────────────────────
 else:
     st.info(
-        "👆 Enter a question above about Grab Holdings' financials, strategy, or risk factors.\n\n"
-        "This system answers **only** from official Grab filings — no external data is used."
+        "👆 Enter a question above about Microsoft Corporation's financials, segments, and strategy.\n\n"
+        "This system answers **only** from official Microsoft SEC filings — no external data is used."
     )
 
     # Show sample questions as clickable hints
     st.markdown("**Try these questions:**")
     cols = st.columns(2)
     sample_qs = [
-        ("📈 Revenue", "What was Grab's total revenue for FY2023?"),
-        ("💹 EBITDA", "How did Grab's adjusted EBITDA evolve from FY2022 to FY2023?"),
-        ("⚠️ Risks", "What are the top three regulatory risks in the FY2023 20-F?"),
-        ("🗺 Strategy", "What are Grab's strategic priorities as stated at Investor Day 2023?"),
-        ("📊 Segments", "What was the GMV breakdown by segment in FY2023?"),
-        ("💰 Cash", "What was Grab's cash position at end of FY2023?"),
+        ("📈 Revenue", "What was Microsoft's total revenue for FY2024?"),
+        ("☁️ Azure", "How did Azure revenue grow from FY2023 to FY2024?"),
+        ("⚠️ Risks", "What are the top three risk factors in the FY2024 10-K?"),
+        ("🗺 Strategy", "What is Microsoft's AI strategy as described in its latest filings?"),
+        ("📊 Segments", "What was the revenue breakdown by segment in FY2024?"),
+        ("💰 Cloud", "What was Microsoft's Intelligent Cloud segment revenue in Q1 FY2025?"),
     ]
     for i, (label, q) in enumerate(sample_qs):
         col = cols[i % 2]
         with col:
             if st.button(f"{label}: {q[:45]}...", key=f"sample_{i}", use_container_width=True):
-                st.session_state["question_input"] = q
+                st.session_state["_pending_question"] = q
                 st.rerun()

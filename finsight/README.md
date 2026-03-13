@@ -1,6 +1,6 @@
-# FinSight: RAG-Based Financial Filings QA — Grab Holdings (NASDAQ: GRAB)
+# FinSight: RAG-Based Financial Filings QA — Microsoft Corporation (NASDAQ: MSFT)
 
-A question-answering system over **official Grab Holdings financial disclosures only**, implementing and comparing three RAG variants:
+A question-answering system over **official Microsoft Corporation SEC filings only**, implementing and comparing three RAG variants:
 
 | Variant | Pipeline | Description |
 |---------|----------|-------------|
@@ -16,27 +16,24 @@ A question-answering system over **official Grab Holdings financial disclosures 
 # 1. Clone and set up environment
 git clone https://github.com/<your-org>/finsight.git
 cd finsight
-python -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
 # 2. Configure secrets
 cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
+# Edit .env — add ANONYMIZED_TELEMETRY=False to suppress ChromaDB telemetry
 
-# 3. Place Grab PDF files in data/raw/
-# See "Data Acquisition" section below
-
-# 4. Run ingestion pipeline
+# 3. Run ingestion pipeline (parses PDFs in data/raw/)
 python scripts/ingest_all.py
 
-# 5. Build vector and BM25 indexes
+# 4. Build vector and BM25 indexes
 python scripts/build_index.py
 
-# 6. Verify everything works
+# 5. Verify everything works
 python scripts/smoke_test.py
 
-# 7. Launch the app
+# 6. Launch the app
 streamlit run app/streamlit_app.py
 ```
 
@@ -44,21 +41,23 @@ streamlit run app/streamlit_app.py
 
 ## Data Acquisition
 
-Download the following official Grab Holdings documents and place them in `data/raw/` with the exact filenames listed:
+The following Microsoft SEC filings are indexed (already downloaded to `data/raw/`):
 
-| Filename | Document | Source |
+| Filename | Document | Period |
 |----------|----------|--------|
-| `grab_20f_fy2023.pdf` | FY2023 Annual Report (20-F) | [SEC EDGAR](https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=GRAB) |
-| `grab_20f_fy2022.pdf` | FY2022 Annual Report (20-F) | SEC EDGAR |
-| `grab_6k_q3_2024.pdf` | Q3 2024 Results (6-K) | SEC EDGAR |
-| `grab_6k_q2_2024.pdf` | Q2 2024 Results (6-K) | SEC EDGAR |
-| `grab_6k_q1_2024.pdf` | Q1 2024 Results (6-K) | SEC EDGAR |
-| `grab_earnings_pr_q4_fy2023.pdf` | Q4 FY2023 Earnings Release | [ir.grab.com](https://ir.grab.com) |
-| `grab_investor_day_2023.pdf` | Investor Day 2023 Presentation | [ir.grab.com](https://ir.grab.com) |
-| `grab_earnings_deck_q2_2024.pdf` | Q2 2024 Earnings Presentation | ir.grab.com |
-| `grab_earnings_deck_q3_2024.pdf` | Q3 2024 Earnings Presentation | ir.grab.com |
+| `msft_10k_fy2022.pdf` | Annual Report (10-K) | FY2022 (ended Jun 30, 2022) |
+| `msft_10k_fy2023.pdf` | Annual Report (10-K) | FY2023 (ended Jun 30, 2023) |
+| `msft_10k_fy2024.pdf` | Annual Report (10-K) | FY2024 (ended Jun 30, 2024) |
+| `msft_10k_fy2025.pdf` | Annual Report (10-K) | FY2025 (ended Jun 30, 2025) |
+| `msft_10q_q1_fy2025.pdf` | Quarterly Report (10-Q) | Q1 FY2025 (Sep 2024) |
+| `msft_10q_q2_fy2025.pdf` | Quarterly Report (10-Q) | Q2 FY2025 (Dec 2024) |
+| `msft_10q_q3_fy2025.pdf` | Quarterly Report (10-Q) | Q3 FY2025 (Mar 2025) |
+| `msft_10q_q1_fy2026.pdf` | Quarterly Report (10-Q) | Q1 FY2026 (Sep 2025) |
+| `msft_10q_q2_fy2026.pdf` | Quarterly Report (10-Q) | Q2 FY2026 (Dec 2025) |
 
-**Verification:** After placing files, run `python scripts/ingest_all.py --doc grab_20f_fy2023` for a single-document test.
+Source: [SEC EDGAR](https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=789019) / [Microsoft Investor Relations](https://investor.microsoft.com/sec-filings)
+
+**Note:** Microsoft fiscal year ends June 30. Q1=Jul–Sep, Q2=Oct–Dec, Q3=Jan–Mar, Q4=Apr–Jun.
 
 ---
 
@@ -76,10 +75,6 @@ python scripts/build_index.py --dense-only
 
 # Build only the BM25 sparse index
 python scripts/build_index.py --sparse-only
-
-# Use a different chunking configuration
-python scripts/ingest_all.py --chunking experiment_A
-python scripts/build_index.py --reset
 ```
 
 ---
@@ -94,27 +89,37 @@ streamlit run app/streamlit_app.py
 
 ---
 
+## CLI Query Tool
+
+```bash
+# Run a question using the default mode from settings.yaml
+python scripts/run_query.py "What was Microsoft's total revenue in FY2024?"
+
+# Explicitly choose a mode
+python scripts/run_query.py "How did Azure grow in Q1 FY2025?" --mode baseline
+python scripts/run_query.py "How did Azure grow in Q1 FY2025?" --mode advanced
+```
+
+---
+
 ## Run Evaluation
 
 ```bash
-# Full evaluation — all 80 questions across all 3 variants
-python evaluation/run_eval.py
+# Full RAGAS evaluation — both modes, all 20 questions
+python evaluation/run_evaluation.py
 
-# Quick test — first 10 questions only
-python evaluation/run_eval.py --limit 10
+# Quick test — first 5 questions only
+python evaluation/run_evaluation.py --limit 5
 
-# Single variant
-python evaluation/run_eval.py --variants v1_baseline
+# Single mode
+python evaluation/run_evaluation.py --modes baseline
+python evaluation/run_evaluation.py --modes advanced
 
-# Skip investment advice guardrail tests
-python evaluation/run_eval.py --skip-guardrail-tests
-
-# Compute metrics from saved results
-python evaluation/metrics.py --results evaluation/results/
-
-# Skip GPT-judge (to avoid API calls)
-python evaluation/metrics.py --skip-gpt-judge
+# Custom output path
+python evaluation/run_evaluation.py --output evaluation/results/my_run.json
 ```
+
+Results are saved to `evaluation/results/eval_results.json` and a comparison table is printed.
 
 ---
 
@@ -137,7 +142,7 @@ finsight/
 │   ├── chunking.yaml        # Chunking experiment configs
 │   └── prompts.yaml         # All prompt templates
 ├── data/
-│   ├── raw/                 # Downloaded PDFs (not committed to git)
+│   ├── raw/                 # Microsoft SEC filing PDFs (not committed to git)
 │   ├── processed/           # Chunked + tagged JSON per document
 │   └── metadata/            # Metadata schema
 ├── indexes/
@@ -152,15 +157,15 @@ finsight/
 │   ├── pipeline/            # V1/V2/V3 end-to-end pipelines
 │   └── utils/               # Config loader, logger
 ├── evaluation/
-│   ├── benchmark.csv        # 80-question benchmark
-│   ├── run_eval.py          # Evaluation runner
-│   ├── metrics.py           # Metrics computation
-│   └── results/             # JSON result files per variant
+│   ├── eval_dataset.json    # 20-question benchmark (4 categories)
+│   ├── run_evaluation.py    # RAGAS evaluation runner
+│   └── results/             # JSON result files per run
 ├── app/
 │   └── streamlit_app.py     # Streamlit UI
 ├── scripts/
 │   ├── ingest_all.py        # Full ingestion pipeline
 │   ├── build_index.py       # Index builder
+│   ├── run_query.py         # CLI query tool
 │   └── smoke_test.py        # Quick sanity check
 └── notebooks/
     ├── 01_data_exploration.ipynb
@@ -176,16 +181,17 @@ Edit `config/settings.yaml` to change:
 - Embedding model (`embeddings.model`)
 - LLM model and temperature (`generation.model`, `generation.temperature`)
 - Retrieval top-k values (`retrieval.dense_top_k`, etc.)
-- Chunking parameters (set in `config/chunking.yaml`, select in `settings.yaml`)
+- Retrieval mode (`retrieval.mode`: `baseline` or `advanced`)
+- Guardrails (`guardrails.out_of_scope_check`, `guardrails.require_citations`, etc.)
 
 ---
 
 ## System Requirements
 
-- Python 3.10+
+- Python 3.11 (recommended; numpy 1.26.4 incompatible with 3.14)
 - 8GB RAM minimum (16GB recommended for all models loaded simultaneously)
 - ~2GB disk space for indexes
-- OpenAI API key
+- vLLM server running `qwen2.5-14b` at `http://localhost:8000/v1` (or replace with OpenAI-compatible endpoint)
 
 ---
 
@@ -195,11 +201,11 @@ Edit `config/settings.yaml` to change:
 |------|-----------------|
 | **Data & Retrieval Lead** | Ingestion, chunking, BM25/Chroma indexing, retrieval modules |
 | **Model & App Lead** | Embeddings, reranker, generation, citation, Streamlit app |
-| **Evaluation & Report Lead** | Benchmark, metrics, GPT-judge, qualitative analysis, report |
+| **Evaluation & Report Lead** | Benchmark, RAGAS metrics, GPT-judge, qualitative analysis, report |
 
 ---
 
 ## License
 
-Academic use only. All Grab Holdings documents are the property of Grab Holdings Limited.
+Academic use only. All Microsoft Corporation documents are the property of Microsoft Corporation.
 This system is built for research and educational purposes.

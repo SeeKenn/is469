@@ -1,6 +1,6 @@
 """
 ingest_all.py
-Runs the complete ingestion pipeline for all configured Grab documents:
+Runs the complete ingestion pipeline for all configured Microsoft documents:
   1. Check which documents are present in data/raw/
   2. Parse PDF → pages
   3. Clean pages
@@ -11,7 +11,7 @@ Runs the complete ingestion pipeline for all configured Grab documents:
 Run this before build_index.py.
 Usage:
     python scripts/ingest_all.py
-    python scripts/ingest_all.py --doc grab_20f_fy2023   # single document
+    python scripts/ingest_all.py --doc msft_10k_fy2024   # single document
     python scripts/ingest_all.py --chunking experiment_A  # different chunking config
 """
 
