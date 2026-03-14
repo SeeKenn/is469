@@ -136,11 +136,12 @@ def compute_ragas_metrics(results: list, cfg: dict) -> dict:
         from ragas.llms import LangchainLLMWrapper
         from ragas.embeddings import LangchainEmbeddingsWrapper
         from datasets import Dataset
-        from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+        from langchain_openai import ChatOpenAI
+        from langchain_huggingface import HuggingFaceEmbeddings
     except ImportError as e:
         logger.error(
             f"Missing dependency for RAGAS evaluation: {e}. "
-            f"Install with: pip install ragas langchain langchain-openai datasets"
+            f"Install with: pip install ragas langchain langchain-openai langchain-huggingface datasets"
         )
         return {
             "faithfulness": 0.0,
@@ -160,15 +161,14 @@ def compute_ragas_metrics(results: list, cfg: dict) -> dict:
             openai_api_base=base_url,
             openai_api_key=api_key,
             temperature=0.0,
-            max_tokens=512,
+            max_tokens=1024,
         )
     )
 
+    # Use local sentence-transformers for embeddings (vLLM doesn't serve /embeddings)
     judge_embeddings = LangchainEmbeddingsWrapper(
-        OpenAIEmbeddings(
-            model=cfg["embeddings"]["model"],
-            openai_api_base=base_url,
-            openai_api_key=api_key,
+        HuggingFaceEmbeddings(
+            model_name=cfg["embeddings"]["model"],
         )
     )
 
@@ -199,11 +199,20 @@ def compute_ragas_metrics(results: list, cfg: dict) -> dict:
             llm=judge_llm,
             embeddings=judge_embeddings,
         )
+        # EvaluationResult supports [] access (not .get())
+        # Values may be per-question lists — compute mean if so
+        import numpy as np
+        def _safe_mean(val):
+            if isinstance(val, (list, np.ndarray)):
+                clean = [v for v in val if v is not None and not (isinstance(v, float) and np.isnan(v))]
+                return float(np.mean(clean)) if clean else 0.0
+            return float(val)
+
         scores = {
-            "faithfulness": round(float(eval_result.get("faithfulness", 0.0)), 4),
-            "answer_relevancy": round(float(eval_result.get("answer_relevancy", 0.0)), 4),
-            "context_recall": round(float(eval_result.get("context_recall", 0.0)), 4),
-            "context_precision": round(float(eval_result.get("context_precision", 0.0)), 4),
+            "faithfulness": round(_safe_mean(eval_result["faithfulness"]), 4),
+            "answer_relevancy": round(_safe_mean(eval_result["answer_relevancy"]), 4),
+            "context_recall": round(_safe_mean(eval_result["context_recall"]), 4),
+            "context_precision": round(_safe_mean(eval_result["context_precision"]), 4),
         }
     except Exception as e:
         logger.error(f"RAGAS evaluation failed: {e}")
