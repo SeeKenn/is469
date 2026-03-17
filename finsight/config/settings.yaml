@@ -26,9 +26,9 @@ retrieval:
   baseline_top_k: 5         # top-k for baseline mode (dense-only, no reranker)
   dense_top_k: 25
   sparse_top_k: 25
-  rerank_top_k: 35
-  final_context_k: 12
-  period_guaranteed_slots: 6   # guarantee >=N context slots from detected fiscal period
+  rerank_top_k: 20
+  final_context_k: 10
+  period_guaranteed_slots: 3   # guarantee >=N context slots from detected fiscal period
   rrf_k: 60              # RRF constant — do not change without reason
   weak_evidence_threshold: 0.3
 
@@ -43,7 +43,7 @@ generation:
   api_key: dummy
   temperature: 0.0
   max_tokens: 512
-  max_chunk_chars: 2500
+  max_chunk_chars: 1800
   timeout_seconds: 120
 
 guardrails:

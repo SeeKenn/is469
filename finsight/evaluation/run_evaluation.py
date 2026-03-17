@@ -150,18 +150,22 @@ def compute_ragas_metrics(results: list, cfg: dict) -> dict:
             "context_precision": 0.0,
         }
 
+    from ragas import RunConfig
+
     gen_cfg = cfg["generation"]
     base_url = gen_cfg.get("base_url", "http://localhost:8000/v1")
     api_key = gen_cfg.get("api_key", "dummy")
     model = gen_cfg.get("model", "qwen2.5-14b")
+    timeout_s = gen_cfg.get("timeout_seconds", 120)
 
     judge_llm = LangchainLLMWrapper(
         ChatOpenAI(
             model=model,
-            openai_api_base=base_url,
-            openai_api_key=api_key,
+            base_url=base_url,
+            api_key=api_key,
             temperature=0.0,
-            max_tokens=1024,
+            max_tokens=512,
+            timeout=timeout_s,
         )
     )
 
@@ -170,6 +174,15 @@ def compute_ragas_metrics(results: list, cfg: dict) -> dict:
         HuggingFaceEmbeddings(
             model_name=cfg["embeddings"]["model"],
         )
+    )
+
+    # Limit concurrency to 2 so the local vLLM isn't flooded with parallel judge requests.
+    # max_retries=3 handles transient timeouts gracefully.
+    ragas_run_cfg = RunConfig(
+        timeout=timeout_s,
+        max_workers=2,
+        max_retries=3,
+        max_wait=60,
     )
 
     valid_results = [r for r in results if not r.get("error")]
@@ -198,6 +211,7 @@ def compute_ragas_metrics(results: list, cfg: dict) -> dict:
             metrics=metrics,
             llm=judge_llm,
             embeddings=judge_embeddings,
+            run_config=ragas_run_cfg,
         )
         # EvaluationResult supports [] access (not .get())
         # Values may be per-question lists — compute mean if so
@@ -283,6 +297,11 @@ def main():
         choices=["baseline", "advanced"],
         help="Modes to evaluate (default: both)",
     )
+    parser.add_argument(
+        "--skip-ragas",
+        action="store_true",
+        help="Skip RAGAS scoring. Saves Q&A results only — run rescore_ragas.py separately.",
+    )
     args = parser.parse_args()
 
     cfg = load_config()
@@ -307,23 +326,32 @@ def main():
         pipeline = build_pipeline(mode, cfg)
         per_question = run_questions(pipeline, dataset)
 
-        logger.info(f"Computing RAGAS metrics for {mode}...")
-        ragas_scores = compute_ragas_metrics(per_question, cfg)
-
         latencies = [r["latency_seconds"] for r in per_question if not r.get("error")]
         avg_latency = sum(latencies) / max(len(latencies), 1)
 
-        aggregate = {
+        # Save Q&A results immediately so they are not lost if RAGAS crashes.
+        all_results[mode] = {
+            "per_question": per_question,
+            "aggregate": {"avg_latency_seconds": round(avg_latency, 4)},
+        }
+        output_path = PROJECT_ROOT / args.output
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(all_results, f, indent=2, ensure_ascii=False)
+        logger.info(f"Q&A results saved to {output_path}")
+
+        if args.skip_ragas:
+            logger.info(f"Skipping RAGAS scoring for {mode} (--skip-ragas). Run rescore_ragas.py to score.")
+            continue
+
+        logger.info(f"Computing RAGAS metrics for {mode}...")
+        ragas_scores = compute_ragas_metrics(per_question, cfg)
+
+        all_results[mode]["aggregate"] = {
             **ragas_scores,
             "avg_latency_seconds": round(avg_latency, 4),
         }
-
-        all_results[mode] = {
-            "per_question": per_question,
-            "aggregate": aggregate,
-        }
-
-        logger.info(f"Mode {mode} complete: {json.dumps(aggregate, indent=2)}")
+        logger.info(f"Mode {mode} complete: {json.dumps(all_results[mode]['aggregate'], indent=2)}")
 
     output_path = PROJECT_ROOT / args.output
     output_path.parent.mkdir(parents=True, exist_ok=True)

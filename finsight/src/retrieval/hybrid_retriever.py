@@ -20,36 +20,51 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-# Mapping from year mention → fiscal_period metadata values to boost
+# Mapping from year mention → fiscal_period metadata values to boost.
+# Values must exactly match the fiscal_period field in settings.yaml / chunk metadata.
+# Annual 10-K format: "FY2024". Quarterly 10-Q format: "Q1 FY2025", "Q2 FY2025", etc.
 _FY_MAP = {
     "2022": ["FY2022"],
     "2023": ["FY2023"],
     "2024": ["FY2024"],
-    "2025": ["Q1 2025", "Q2 2025", "Q3 2025", "Q4 2025"],
-    "q1 2025": ["Q1 2025"], "q2 2025": ["Q2 2025"],
-    "q3 2025": ["Q3 2025"], "q4 2025": ["Q4 2025"],
-    "q1 2024": ["Q1 2024"], "q2 2024": ["Q2 2024"],
-    "q3 2024": ["Q3 2024"], "q4 2024": ["Q4 2024"],
+    "2025": ["FY2025", "Q1 FY2025", "Q2 FY2025", "Q3 FY2025", "Q4 FY2025"],
+    "2026": ["FY2026", "Q1 FY2026", "Q2 FY2026"],
+    "q1 2025": ["Q1 FY2025"], "q2 2025": ["Q2 FY2025"],
+    "q3 2025": ["Q3 FY2025"], "q4 2025": ["Q4 FY2025"],
+    "q1 2024": ["Q1 FY2024"], "q2 2024": ["Q2 FY2024"],
+    "q3 2024": ["Q3 FY2024"], "q4 2024": ["Q4 FY2024"],
+    "q1 2026": ["Q1 FY2026"], "q2 2026": ["Q2 FY2026"],
 }
 
 
 def _detect_fiscal_periods(query: str) -> List[str]:
-    """Return fiscal_period metadata values mentioned in the query."""
+    """Return fiscal_period metadata values mentioned in the query.
+
+    Detection order (most specific first):
+      1. Quarter mentions:  Q1 FY2025, Q3 2024, Q1 FY 2025
+      2. Full-year mentions (only if no quarters found): FY2024, fiscal year 2023
+      3. Bare year mentions (last resort): "revenue in 2023"
+    """
     q = query.lower()
     periods = []
-    # Full year mentions: FY2023, FY 2023, fiscal year 2023
-    for m in re.finditer(r'(?:fy\s*|fiscal\s+year\s*)(\d{4})', q):
-        key = m.group(1)
-        periods.extend(_FY_MAP.get(key, [f"FY{key}"]))
-    # Quarter mentions: Q3 2024, Q1 2025
-    for m in re.finditer(r'q([1-4])\s+(\d{4})', q):
+
+    # 1. Quarter mentions: Q3 FY2024, Q1 FY2025, Q1 2025 (FY is optional)
+    for m in re.finditer(r'q([1-4])\s+(?:fy\s*)?(\d{4})', q):
         key = f"q{m.group(1)} {m.group(2)}"
-        periods.extend(_FY_MAP.get(key, [f"Q{m.group(1)} {m.group(2)}"]))
-    # Bare year mentions when no FY prefix: "revenue in 2023"
+        periods.extend(_FY_MAP.get(key, [f"Q{m.group(1)} FY{m.group(2)}"]))
+
+    # 2. Full year mentions (only when no specific quarters detected)
+    if not periods:
+        for m in re.finditer(r'(?:fy\s*|fiscal\s+year\s*)(\d{4})', q):
+            key = m.group(1)
+            periods.extend(_FY_MAP.get(key, [f"FY{key}"]))
+
+    # 3. Bare year mentions (last resort): "revenue in 2023"
     if not periods:
         for m in re.finditer(r'\b(20\d{2})\b', q):
             key = m.group(1)
             periods.extend(_FY_MAP.get(key, []))
+
     return list(dict.fromkeys(periods))  # deduplicate, preserve order
 
 
