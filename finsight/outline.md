@@ -11,16 +11,18 @@ To develop FinSight, a domain-specific question-answering (QA) system over Micro
 
 ## 2. Project Scope
 This project implements & evaluates 3 RAG variants
+```
 | Variant | Pipeline | Description |
 |---------|----------|-------------|
 | **V1 Baseline** | Dense → Generate | Fixed-size chunking + embedding retrieval |
 | **V2 Advanced A** | Dense → Rerank → Generate | Dense retrieval + cross-encoder reranking |
 | **V3 Advanced B** | BM25 + Dense → RRF → Rerank → Generate | Hybrid retrieval + RRF fusion + reranking |
-
+```
 The project addresses a real-world financial QA task, aligning with domain-specific RAG system requirements.
 
 ## 3. System Architecture
 ### Project Structure
+```
 finsight/
 ├── config/
 │   ├── settings.yaml        # Main configuration
@@ -56,8 +58,10 @@ finsight/
     ├── 01_data_exploration.ipynb
     ├── 02_chunking_experiment.ipynb
     └── 03_retrieval_debug.ipynb
+```
 
 ### Pipeline Overview
+```
 User Query
    ↓
 Query Processing
@@ -75,6 +79,7 @@ Top-k Retrieved Chunks
 LLM Generator
    ↓
 Answer + Citations
+```
 
 ### Data Flow
 1. Ingestion: Parse SEC filing PDFs into structured texts
@@ -88,7 +93,7 @@ Answer + Citations
 
 ## 4. Dataset
 The following Microsoft SEC filings are indexed (already downloaded to `data/raw/`):
-
+```
 | Filename | Document | Period |
 |----------|----------|--------|
 | `msft_10k_fy2022.pdf` | Annual Report (10-K) | FY2022 (ended Jun 30, 2022) |
@@ -100,7 +105,7 @@ The following Microsoft SEC filings are indexed (already downloaded to `data/raw
 | `msft_10q_q3_fy2025.pdf` | Quarterly Report (10-Q) | Q3 FY2025 (Mar 2025) |
 | `msft_10q_q1_fy2026.pdf` | Quarterly Report (10-Q) | Q1 FY2026 (Sep 2025) |
 | `msft_10q_q2_fy2026.pdf` | Quarterly Report (10-Q) | Q2 FY2026 (Dec 2025) |
-
+```
 Source: [SEC EDGAR](https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=789019) / [Microsoft Investor Relations](https://investor.microsoft.com/sec-filings)
 
 **Note:** Microsoft fiscal year ends June 30. Q1=Jul–Sep, Q2=Oct–Dec, Q3=Jan–Mar, Q4=Apr–Jun.
@@ -188,42 +193,34 @@ The ingestion pipeline converts SEC filing PDFs into structured text using a par
 ---
 
 ### **5.3 Reranking Module (V2, V3)**
-
 * Cross-encoder model evaluates query–chunk pairs
 * Produces relevance scores for final ranking
 
 **Purpose:**
-
 * Improve **precision at top-k**
 * Filter noisy results from hybrid retrieval
 
 **Trade-offs:**
-
 * Increased latency
 * Additional compute cost
 
 **Hypothesis:**
-
 * Reranking significantly improves answer faithfulness by ensuring only highly relevant context is passed to the generator
 
 ---
 
 ### **5.4 Generation Module**
-
 * LLM generates answers conditioned on retrieved context
 * Prompt includes:
-
   * Retrieved chunks
   * Instructions for grounded answering
   * Citation formatting requirements
 
 **Key Design Choices:**
-
 * Low temperature → reduce hallucination
 * Structured prompts → enforce answer format
 
 **Output Requirements:**
-
 * Direct answer
 * Supporting citations (document + section)
 
@@ -232,13 +229,11 @@ The ingestion pipeline converts SEC filing PDFs into structured text using a par
 ### **5.5 Guardrails & Safety Mechanisms**
 
 **Implemented Controls:**
-
 * Out-of-scope detection (reject unrelated queries)
 * Mandatory citation enforcement
 * Context-limited answering (no external knowledge)
 
 **Rationale:**
-
 * Financial QA requires high factual reliability
 * Prevent hallucinated financial figures
 
@@ -247,16 +242,13 @@ The ingestion pipeline converts SEC filing PDFs into structured text using a par
 ## **6. Evaluation Plan (Comprehensive Framework)**
 
 ### **6.1 Quantitative Evaluation**
-
 Evaluation will be conducted using **RAGAS metrics**, including:
-
 * **Faithfulness**: Alignment with retrieved context
 * **Answer Relevance**: Relevance to the question
 * **Context Precision**: Quality of retrieved chunks
 * **Context Recall**: Coverage of relevant information
 
 **Experimental Setup:**
-
 * 20 benchmark questions
 * Same dataset across all variants
 * Controlled parameters (top-k, temperature)
@@ -266,7 +258,6 @@ Evaluation will be conducted using **RAGAS metrics**, including:
 ### **6.2 Qualitative Evaluation (Critical Component)**
 
 A structured **error analysis framework** with case categories will be applied:
-
 1. **Retrieval Failure:** Relevant chunk not retrieved
 2. **Ranking Failure:** Relevant chunk retrieved but ranked too low
 3. **Chunking Failure:** Information split across chunks
@@ -275,7 +266,6 @@ A structured **error analysis framework** with case categories will be applied:
 ---
 
 #### **Analysis Method**
-
 For each failure:
 * Compare expected vs generated answer
 * Inspect retrieved chunks
@@ -287,32 +277,28 @@ For each failure:
 ### **6.3 Category-Based Evaluation**
 
 Questions will be grouped into:
-
 * **Factual Retrieval** (e.g., revenue figures)
 * **Temporal Reasoning** (e.g., quarter-over-quarter growth)
 * **Multi-hop Reasoning** (cross-section synthesis)
 * **Comparative Analysis** (e.g., year-over-year changes)
 
 **Goal:**
-
 * Identify which pipeline performs best per category
 * Understand strengths & downsides of each retrieval strategy
 
 ---
 
 ### **6.4 Ablation Study (Component-Level Analysis)**
-
 To isolate impact of components:
-
+```
 | Experiment         | Description               |
 | ------------------ | ------------------------- |
 | Dense only         | Baseline retrieval        |
 | BM25 only          | Sparse retrieval          |
 | Hybrid (no rerank) | Fusion without refinement |
 | Hybrid + rerank    | Full pipeline             |
-
+```
 **Metrics Compared:**
-
 * RAGAS scores
 * Retrieval precision
 * Answer accuracy
@@ -320,7 +306,6 @@ To isolate impact of components:
 ---
 
 ### **6.5 Latency & Efficiency Analysis**
-
 **Measure:**
 * End-to-end response time per query
 * Retrieval vs reranking vs generation time
@@ -333,7 +318,6 @@ To isolate impact of components:
 ---
 
 ## **7. Expected Insights & Hypotheses**
-
 The study aims to validate:
 
 1. **Hybrid retrieval improves recall**
@@ -353,7 +337,6 @@ The study aims to validate:
 ## **8. Risks, Limitations & Mitigation**
 
 ### **8.1 Key Risks**
-
 1. **Hallucinated financial values**
 2. **Incorrect retrieval leading to misleading answers**
 3. **Loss of context due to chunk boundaries**
@@ -380,16 +363,12 @@ The study aims to validate:
 ## **9. Reproducibility & Experimental Control**
 
 * Fixed random seed (42) ensures consistent results
-
 * All parameters configurable via YAML
-
 * Full pipeline reproducible via scripts:
-
   * ingestion
   * indexing
   * querying
   * evaluation
-
 * Version-pinned dependencies ensure environment stability
 
 ---
@@ -412,63 +391,71 @@ The study aims to validate:
 
 **Examples of Quantitative Results from Project Study**
 1. RAG Performance Metrics
+```
 | Metric            | Unit        | V1 Baseline | V2 (Rerank) | V3 (Hybrid) | Interpretation              |
 | ----------------- | ----------- | ----------- | ----------- | ----------- | --------------------------- |
 | Faithfulness      | Score (0–1) | 0.72        | 0.81        | **0.86**    | Higher = less hallucination |
 | Answer Relevance  | Score (0–1) | 0.75        | 0.83        | **0.88**    | Better alignment to query   |
 | Context Precision | Score (0–1) | 0.68        | 0.79        | **0.85**    | Better chunk selection      |
 | Context Recall    | Score (0–1) | 0.70        | 0.76        | **0.91**    | Hybrid improves recall      |
-
+```
 
 2. Latency & Efficiency Metrics
+```
 | Metric            | Unit        | V1   | V2   | V3   |
 | ----------------- | ----------- | ---- | ---- | ---- |
 | Avg Response Time | seconds (s) | 1.8s | 2.9s | 3.6s |
 | Retrieval Time    | seconds (s) | 0.6s | 0.6s | 1.2s |
 | Reranking Time    | seconds (s) | —    | 1.1s | 1.3s |
 | Generation Time   | seconds (s) | 1.2s | 1.2s | 1.1s |
-
+```
 
 3. Accuracy Success Metrics
+```
 | Metric              | Unit | V1  | V2  | V3      |
 | ------------------- | ---- | --- | --- | ------- |
 | Correct Answer Rate | %    | 65% | 78% | **85%** |
-
+```
 
 4. Retrieval Quality metrics
+```
 | Metric                     | Unit        | V1   | V2   | V3       |
 | -------------------------- | ----------- | ---- | ---- | -------- |
 | Top-3 Hit Rate             | %           | 60%  | 72%  | **88%**  |
 | MRR (Mean Reciprocal Rank) | Score (0–1) | 0.55 | 0.69 | **0.81** |
-
+```
 
 5. Category-based Performance
+```
 | Category             | Unit      | V1  | V2  | V3      |
 | -------------------- | --------- | --- | --- | ------- |
 | Factual Questions    | % correct | 80% | 88% | **90%** |
 | Temporal Reasoning   | % correct | 60% | 72% | **85%** |
 | Multi-hop Reasoning  | % correct | 50% | 68% | **82%** |
 | Comparative Analysis | % correct | 55% | 70% | **84%** |
-
+```
 
 6. Error / Failure Metrics
+```
 | Failure Type       | Unit | V1  | V2  | V3     |
 | ------------------ | ---- | --- | --- | ------ |
 | Retrieval Failures | %    | 25% | 15% | **8%** |
 | Hallucination Rate | %    | 18% | 10% | **6%** |
 | Chunking Errors    | %    | 12% | 12% | 11%    |
-
+```
 
 7. Ablation Study Metrics
+```
 | Setup              | Faithfulness | Recall   | Latency (s) |
 | ------------------ | ------------ | -------- | ----------- |
 | Dense only         | 0.72         | 0.70     | 1.8         |
 | BM25 only          | 0.68         | 0.75     | 1.6         |
 | Hybrid (no rerank) | 0.80         | 0.90     | 2.5         |
 | Hybrid + rerank    | **0.86**     | **0.91** | 3.6         |
-
+```
 
 ### Mapping to Overall Success Criteria
+```
 | Success Criterion       | Metric Used             | Unit         |
 | ----------------------- | ----------------------- | ------------ |
 | Improved answer quality | Faithfulness, relevance | 0–1 score    |
@@ -476,7 +463,7 @@ The study aims to validate:
 | Trade-offs explained    | Latency, cost           | seconds, USD |
 | Robust evaluation       | Accuracy, failure rate  | %            |
 | Insight generation      | Category breakdown      | %            |
-
+```
 ---
 
 ## **12. Conclusion**
