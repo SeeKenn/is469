@@ -362,55 +362,48 @@ A structured **error analysis framework** is used to diagnose system behaviour.
 4. **Query Understanding Failure** (NEW) → Query 
 5. **Generation Failure:** → LLM misinterprets context or hallucinates
 
-| Failure Type       | V0 | V1 | V2 | V3 |
-|--------------------|----|----|----|----|
-| Retrieval Failure  | %  | %  | %  | %  |
-| Ranking Failure    | %  | %  | %  | %  |
-| Generation Failure | %  | %  | %  | %  |
-
----
+| Failure Type             | V0 | V1 | V2 | V3 | V4 | V5 | V6 |
+|--------------------------|----|----|----|----|----|----|----|
+| Retrieval Failure        | —  | %  | %  | %  | %  | %  | %  |
+| Ranking Failure          | —  | %  | %  | %  | %  | %  | %  |
+| Query Understanding Fail | %  | %  | %  | %  | %↓ | %  | %  |
+| Generation Failure       | %  | %  | %  | %  | %  | %  | %↓ |
 
 #### **Analysis Method**
 For each failure:
-* Compare expected vs generated answer
-* Inspect retrieved chunks
-* Identify root cause
-* Propose fix
+* Compare ground truth vs generated answer
+* Inspect retrieved chunks and rankings
+* Identify root cause (component responsible)
+* Map failure → pipeline design
+* Propose targeted improvement
 
 ---
 
-### **6.3 Category-Based Evaluation**
-
-Questions will be grouped into:
-* **Factual Retrieval** (e.g., revenue figures)
-* **Temporal Reasoning** (e.g., quarter-over-quarter growth)
-* **Multi-hop Reasoning** (cross-section synthesis)
-* **Comparative Analysis** (e.g., year-over-year changes)
-
-**Goal:**
-* Identify which pipeline performs best per category
-* Understand strengths & downsides of each retrieval strategy
-
----
-
-### **6.4 Ablation Study (Component-Level Analysis)**
+### **6.5 Component-Level Ablation Study**
 To isolate impact of components:
-
-| Experiment         | Description               |
-|--------------------|---------------------------|
-| Dense only         | Baseline retrieval        |
-| BM25 only          | Sparse retrieval          |
-| Hybrid (no rerank) | Fusion without refinement |
-| Hybrid + rerank    | Full pipeline             |
+| Experiment            | Component Tested      |
+|-----------------------|-----------------------|
+| LLM-only (V0)         | No retrieval baseline |
+| Dense only            | Semantic retrieval    |
+| BM25 only             | Lexical retrieval     |
+| Hybrid (no rerank)    | Fusion effect         |
+| Hybrid + rerank       | Reranking effect      |
+| + Query rewriting     | Query understanding   |
+| + Metadata filtering  | Structured retrieval  |
+| + Context compression | Context quality       |
 
 **Metrics Compared:**
 * RAGAS scores
-* Retrieval precision
-* Answer accuracy
+* Retrieval precision (MRR, hit rate)
+* Answer accuracy (%)
+
+**Goal**
+* Quantify incremental gains from each component
+* Identify diminishing returns or trade-offs (if any)
 
 ---
 
-### **6.5 Latency & Efficiency Analysis**
+### **6.6 Latency & Efficiency Analysis**
 **Measure:**
 * End-to-end response time per query
 * Retrieval vs reranking vs generation time
@@ -420,48 +413,124 @@ To isolate impact of components:
   * Speed
   * Computational cost
 
+**Key question:** Do advanced RAG components provide sufficient accuracy gains to justify added complexity?
+
 ---
 
-## **7. Expected Insights & Hypotheses**
-The study aims to validate:
+## 7. Expected Insights & Study Outcomes
+### **7.1 Core Study Objective**
+To determine which RAG component(s) are most effective for which query types
 
-1. **Hybrid retrieval improves recall**
-   * Especially for complex or ambiguous queries
+---
 
-2. **Reranking improves precision**
-   * Reduces noise introduced by hybrid retrieval
+### **7.2 Expected Findings (Component x Query Types)**
+1. **Retrieval Strategy**
+* Hybrid retrieval (V3-V6):
+   * Strong improvement in context recall
+   * Especially effective for:
+      * Keyword-heavy queries
+      * Ambiguous queries
 
-3. **Trade-off exists between latency and performance**
-   * Advanced pipelines yield better accuracy but slower responses
+2. **Reranking**
+* Improves:
+   * Context precision
+   * Faithfulness
+* Beneficial for:
+   * Multi-hop reasoning
+   * Complex queries
 
-4. **Chunking strategy impacts answer quality**
-   * Poor chunking leads to incomplete or incorrect answers
+3. **Query Rewriting (V4)**
+* Improves retrieval quality for ambiguous queries
+* Limited impact on siple factual queries
+
+4. **Metadata Filtering (V5)**
+* Improves precision for temporal and structured queries
+* Reduces retrieval noise
+
+5. **Context Compression (V6)**
+* Improves:
+   * Faithfulness
+   * Reduces hallucination
+* Most effective for:
+   * Long-context and multi-hop queries
+
+6. **Chunking Strategy**
+* Semantic chunking: improves multi-hop reasoning
+* Fixed chunking: more effecient but less coherent
+
+---
+
+### **7.3 Cross-cutting Insight**
+Key expected outcome: No single RAG pipeline performs best across all query types
+* Different components provide targeted benefits
+* Optimal performance requires adaptive pipeline design
+
+---
+
+### **7.4 Trade-off Insights**
+| Component           | Benefit              | Cost                         |
+|---------------------|----------------------|------------------------------|
+| Hybrid retrieval    | Higher recall        | More noise                   |
+| Reranking           | Higher precision     | Increased latency            |
+| Query rewriting     | Better understanding | Extra LLM cost               |
+| Metadata filtering  | Better precision     | Requires structured metadata |
+| Context compression | Better faithfulness  | Additional processing        |
+
+---
+
+### **7.5 Final Expected Conclusion**
+The study demonstrates that: Effective RAG systems should not rely on a single pipeline, but instead adapt retrieval, ranking, and context strategies based on query characteristics
 
 ---
 
 ## **8. Risks, Limitations & Mitigation**
 
 ### **8.1 Key Risks**
-1. **Hallucinated financial values**
-2. **Incorrect retrieval leading to misleading answers**
-3. **Loss of context due to chunk boundaries**
-4. **Ambiguity in financial language**
+1. **Hallucinated financial values (V0, weak retrieval cases)**
+* More likely in LLM-only or low-recall retrieval settings
+
+2. **Component Misalignment with query type**
+* Certain components may degrade performance for specific query categories (eg. hybrid retrieval introducing noise for simple factual queries)
+
+3. **Retrieval noise from hybrid and expanded pipelines**
+* Higher recall may introduce irrelevant chunks, affecting downstream generation 
+
+4. **Query ambiguity affecting retrieval quality**
+* Underspecified queries may lead to incorrect or incomplete context retrieval
+
+5. **Chunking-induced information fragmentation**
+* Important financial information split across chunks may hinder multi-hop reasoning
 
 ---
 
 ### **8.2 Mitigation Strategies**
-* Enforce citation-based responses
-* Restrict knowledge to verified SEC filings
-* Use reranking to improve retrieval accuracy
-* Apply conservative generation settings
+1. Citation enforcement + grounded generation → Reduces hallucination and ensures traceability
+
+2. Reranking (V2–V6) → Filters noisy retrieval results, improving precision
+
+3. Query rewriting (V4) → Improves retrieval quality for ambiguous queries
+
+4. Metadata filtering (V5) → Reduces irrelevant search space for structured queries
+
+5. Context compression (V6) → Improves signal-to-noise ratio before generation
+
+6. Controlled evaluation across query types → Ensures failures are analysed systematically rather than hidden in aggregate metrics
 
 ---
 
 ### **8.3 System Limitations**
 * Fixed chunking may break semantic structure
 * Limited ability to interpret tables or structured data
-* Restricted to single-company dataset
-* Limited multi-document reasoning capability
+* Restricted to single-company dataset (Microsoft)
+* Limited multi-document long-range reasoning capability
+
+---
+
+### **8.4 Study-Level Limitations**
+* Small evaluation dataset (20 questions) → May limit statistical generalisability
+* Synthetic benchmark design bias → Questions may not fully reflect real-world user queries
+* Component interaction effects not fully isolated → Some improvements may overlap (e.g., reranking + compression)
+* LLM variability → Results may vary slightly across runs despite fixed seeds
 
 ---
 
@@ -479,86 +548,150 @@ The study aims to validate:
 ---
 
 ## **10. Deliverables & Success Criteria**
-
-### **Deliverables**
+### **10.1 Deliverables**
 * Functional QA system (CLI + Streamlit UI)
 * Code repository with documentation
-* Evaluation results (quantitative + qualitative)
-* Final report with analysis and insights
+* Modular RAG pipeline supporting V0-V6
+* Evaluation framework & results (quantitative + qualitative)
+* Benchmark dataset (query-type categorised)
+* Final report:
+   * Component-level analysis
+   * Query-type insights
+   * Trade-off evaluation
 
 ---
 
-### **Success Criteria**
-* Demonstrated improvement of advanced RAG over baseline
-* Clear explanation of trade-offs
-* Robust evaluation with both quantitative and qualitative evidence
-* Reproducible and well-documented system
+### **10.2 Success Criteria**
+1. Component effectiveness
+* Performance of each RAG component on:
+   * Faithfulness
+   * Retrieval quality
+   * Accuracy
 
-**Examples of Quantitative Results from Project Study**
+2. Query-type Sensitivity
+* Variation in performance across:
+   * Factual
+   * Temporal
+   * Multi-hop
+   * Comparative queries
+
+3. Trade-off analysis
+* Clear explanation of:
+   * Accuracy vs latency
+   * Recall vs precision
+   * Complexity vs performance
+
+Key insight: Which RAG component(s) work best for which query types, and why?
+
+---
+
+### **10.3 Quantitative Results (EXAMPLE)**
 1. RAG Performance Metrics
-
-| Metric            | Unit        | V0 (LLM-only) | V1 (Basic) | V2 (Rerank) | V3 (Hybrid) | Interpretation                          |
-|-------------------|-------------|---------------|-------------|-------------|-------------| --------------------------------------- |
-| Faithfulness      | Score (0–1) | 0.58          | 0.72        | 0.81        | **0.86**    | Higher = less hallucination             |
-| Answer Relevance  | Score (0–1) | 0.62          | 0.75        | 0.83        | **0.88**    | Better alignment to query               |
-| Context Precision | Score (0–1) | —             | 0.68        | 0.79        | **0.85**    | Better chunk selection (RAG only)       |
-| Context Recall    | Score (0–1) | —             | 0.70        | 0.76        | **0.91**    | Hybrid improves recall significantly    |
-
-
-2. Latency & Efficiency Metrics
-
-| Metric            | Unit        | V0   | V1   | V2   | V3   |
-|-------------------|-------------|------|------|------|------|
-| Avg Response Time | seconds (s) | 1.0s | 1.8s | 2.9s | 3.6s |
-| Retrieval Time    | seconds (s) | —    | 0.6s | 0.6s | 1.2s |
-| Reranking Time    | seconds (s) | —    | —    | 1.1s | 1.3s |
-| Generation Time   | seconds (s) | 1.0s | 1.2s | 1.2s | 1.1s |
+| Metric            | Unit | V0 (LLM-only) | V1   | V2   | V3       | V4   | V5       | V6       |
+| ----------------- | ---- | ------------- | ---- | ---- | -------- | ---- | -------- | -------- |
+| Faithfulness      | 0–1  | 0.58          | 0.72 | 0.81 | 0.86     | 0.87 | 0.85     | **0.89** |
+| Answer Relevance  | 0–1  | 0.62          | 0.75 | 0.83 | 0.88     | 0.89 | 0.87     | **0.90** |
+| Context Precision | 0–1  | —             | 0.68 | 0.79 | 0.85     | 0.86 | **0.88** | 0.87     |
+| Context Recall    | 0–1  | —             | 0.70 | 0.76 | **0.91** | 0.92 | 0.88     | 0.89     |
 
 
-3. Accuracy Success Metrics
-
-| Metric              | Unit | V0  | V1  | V2  | V3      |
-|---------------------|------|-----|-----|-----|---------|
-| Correct Answer Rate | %    | 48% | 65% | 78% | **85%** |
-
-
-4. Retrieval Quality metrics
-
-| Metric                     | Unit        | V1   | V2   | V3       |
-| -------------------------- | ----------- | ---- | ---- | -------- |
-| Top-3 Hit Rate             | %           | 60%  | 72%  | **88%**  |
-| MRR (Mean Reciprocal Rank) | Score (0–1) | 0.55 | 0.69 | **0.81** |
+2. Accuracy
+| Metric              | Unit | V0  | V1  | V2  | V3  | V4  | V5  | V6      |
+| ------------------- | ---- | --- | --- | --- | --- | --- | --- | ------- |
+| Correct Answer Rate | %    | 48% | 65% | 78% | 85% | 87% | 86% | **89%** |
 
 
-5. Category-based Performance
-| Category             | Unit      | V0  | V1  | V2  | V3      |
-| -------------------- | --------- | --- | --- | --- | ------- |
-| Factual Questions    | % correct | 65% | 80% | 88% | **90%** |
-| Temporal Reasoning   | % correct | 40% | 60% | 72% | **85%** |
-| Multi-hop Reasoning  | % correct | 30% | 50% | 68% | **82%** |
-| Comparative Analysis | % correct | 35% | 55% | 70% | **84%** |
+3. Category-based Accuracy
+| Category    | V0 | V1 | V2 | V3 | V4 | V5     | V6     |
+| ----------- | -- | -- | -- | -- | -- | ------ | ------ |
+| Factual     | 65 | 80 | 88 | 90 | 90 | **93** | 92     |
+| Temporal    | 40 | 60 | 72 | 85 | 86 | **88** | 87     |
+| Multi-hop   | 30 | 50 | 68 | 82 | 84 | 80     | **88** |
+| Comparative | 35 | 55 | 70 | 84 | 85 | 82     | **87** |
+
+
+4. Latency Trade-offs
+| Variant | Latency (s) | Key Trade-off                 |
+| ------- | ----------- | ----------------------------- |
+| V0      | 1.0         | Fast, low accuracy            |
+| V1      | 1.8         | Efficient baseline            |
+| V2      | 2.9         | Precision ↑, latency ↑        |
+| V3      | 3.6         | Recall ↑, noise ↑             |
+| V4      | 4.2         | Better query understanding    |
+| V5      | 3.0         | Precision ↑ with minimal cost |
+| V6      | 4.5         | Best quality, highest cost    |
+
+
+4. Retrieval Performance 
+**By RAG variation**
+| Metric                     | Unit        | V0 | V1  | V2  | V3  | V4  | V5  | V6  |
+|----------------------------|-------------|----|-----|-----|-----|-----|-----|-----|
+| Top-3 Hit Rate             | %           | —  | 60% | 72% | 88% | 90% | 86% | 89% |
+| MRR (Reciprocal Rank)      | Score (0–1) | —  | 0.55| 0.69| 0.81| 0.83| 0.80| 0.82|
+| Context Recall (RAGAS)     | Score (0–1) | —  | 0.70| 0.76| 0.91| 0.92| 0.88| 0.91|
+| Context Precision (RAGAS)  | Score (0–1) | —  | 0.68| 0.79| 0.85| 0.86| 0.88| 0.87|
+
+**By Query Type**
+| Query Type         | Metric       | V1  | V2  | V3  | V4  | V5  | V6  |
+|--------------------|--------------|-----|-----|-----|-----|-----|-----|
+| Factual            | Hit Rate (%) | 80  | 88  | 90  | 90  | 93  | 92  |
+|                    | MRR          | 0.70| 0.82| 0.85| 0.86| 0.88| 0.87|
+| Temporal           | Hit Rate (%) | 60  | 72  | 85  | 86  | 88  | 87  |
+|                    | MRR          | 0.50| 0.65| 0.80| 0.82| 0.84| 0.83|
+| Multi-hop          | Hit Rate (%) | 50  | 68  | 82  | 84  | 80  | 88  |
+|                    | MRR          | 0.40| 0.60| 0.75| 0.78| 0.72| 0.81|
+| Comparative        | Hit Rate (%) | 55  | 70  | 84  | 85  | 82  | 87  |
+|                    | MRR          | 0.45| 0.62| 0.78| 0.80| 0.76| 0.82|
 
 
 6. Error / Failure Metrics
-| Failure Type       | Unit | V0  | V1  | V2  | V3     |
-| ------------------ | ---- | --- | --- | --- | ------ |
-| Retrieval Failures | %    | —   | 25% | 15% | **8%** |
-| Hallucination Rate | %    | 35% | 18% | 10% | **6%** |
-| Chunking Errors    | %    | —   | 12% | 12% | 11%    |
+**By RAG variation**
+| Failure Type              | Unit | V0  | V1  | V2  | V3  | V4  | V5  | V6  |
+|---------------------------|------|-----|-----|-----|-----|-----|-----|-----|
+| Retrieval Failure         | %    | —   | 25% | 15% | 8%  | 7%  | 10% | 8%  |
+| Ranking Failure           | %    | —   | —   | 18% | 10% | 9%  | 11% | 9%  |
+| Query Understanding Fail  | %    | 22% | 20% | 15% | 12% | 6%  | 14% | 10% |
+| Chunking Failure          | %    | —   | 12% | 12% | 11% | 11% | 10% | 9%  |
+| Generation Failure        | %    | 35% | 18% | 10% | 8%  | 7%  | 9%  | 6%  |
+
+**By Query Type**
+| Query Type  | Failure Type       | V1  | V2  | V3  | V4  | V5  | V6  |
+|-------------|--------------------|-----|-----|-----|-----|-----|-----|
+| Factual     | Retrieval Failure  | 15% | 8%  | 5%  | 5%  | 3%  | 4%  |
+|             | Generation Failure | 12% | 6%  | 5%  | 5%  | 4%  | 3%  |
+| Temporal    | Retrieval Failure  | 30% | 18% | 10% | 9%  | 7%  | 8%  |
+|             | Query Failure      | 18% | 12% | 10% | 5%  | 10% | 7%  |
+| Multi-hop   | Ranking Failure    | —   | 22% | 12% | 10% | 14% | 9%  |
+|             | Chunking Failure   | 15% | 15% | 14% | 13% | 12% | 10% |
+| Comparative | Retrieval Failure  | 28% | 16% | 9%  | 8%  | 10% | 9%  |
+|             | Generation Failure | 20% | 12% | 9%  | 8%  | 10% | 7%  |
 
 
 7. Ablation Study Metrics
+**By Component**
+| Step | Variant| Component Added        | Faithfulness | Accuracy (%) | Latency (s) |
+|------|--------|------------------------|--------------|--------------|-------------|
+| 0    | V0     | None (LLM-only)        | 0.58         | 48%          | 1.0         |
+| 1    | V1     | + Dense Retrieval      | 0.72         | 65%          | 1.8         |
+| 2    | V2     | + Reranking            | 0.81         | 78%          | 2.9         |
+| 3    | V3     | + Hybrid Retrieval     | 0.86         | 85%          | 3.6         |
+| 4    | V4     | + Query Rewriting      | 0.87         | 87%          | 4.2         |
+| 5    | V5     | + Metadata Filtering   | 0.85         | 86%          | 3.0         |
+| 6    | V6     | + Context Compression  | 0.89         | 89%          | 4.5         |
 
-| Setup              | Faithfulness | Recall   | Latency (s) |
-| ------------------ | ------------ | -------- | ----------- |
-| LLM-only (V0)      | 0.58         | —        | 1.0         |
-| Dense only         | 0.72         | 0.70     | 1.8         |
-| BM25 only          | 0.68         | 0.75     | 1.6         |
-| Hybrid (no rerank) | 0.80         | 0.90     | 2.5         |
-| Hybrid + rerank    | **0.86**     | **0.91** | 3.6         |
+
+8. Component impact
+| Component              | Primary Benefit        | Best Query Type     | Trade-off              |
+|------------------------|------------------------|---------------------|------------------------|
+| Dense Retrieval        | Baseline retrieval     | Factual             | Limited recall         |
+| Reranking              | Precision ↑            | Multi-hop           | Latency ↑              |
+| Hybrid Retrieval       | Recall ↑               | Temporal/Ambiguous  | Noise ↑                |
+| Query Rewriting        | Query clarity ↑        | Ambiguous           | Extra LLM cost         |
+| Metadata Filtering     | Precision ↑            | Temporal/Factual    | Requires metadata      |
+| Context Compression    | Faithfulness ↑         | Multi-hop           | Extra processing       |
 
 
-### Mapping to Overall Success Criteria
+### 10.4 Mapping to Overall Success Criteria
 | Success Criterion       | Metric Used                        | Unit             |
 | ----------------------- | ---------------------------------- | ---------------- |
 | Improved answer quality | Faithfulness, relevance            | 0–1 score        |
@@ -567,9 +700,18 @@ The study aims to validate:
 | Robust evaluation       | Accuracy, failure rate             | %                |
 | Insight generation      | Category breakdown, V0 vs RAG gap  | %                |
 
+| Component           | Best For                    | Impact         |
+| ------------------- | --------------------------- | -------------- |
+| Hybrid retrieval    | Ambiguous / keyword queries | Recall ↑       |
+| Reranking           | Multi-hop queries           | Precision ↑    |
+| Query rewriting     | Ambiguous queries           | Retrieval ↑    |
+| Metadata filtering  | Temporal queries            | Precision ↑    |
+| Context compression | Multi-hop queries           | Faithfulness ↑ |
+
+
 ---
 
-## **12. Conclusion**
-This project aims to bridge **practical system development** and **research-driven evaluation** in the domain of financial QA. By systematically comparing multiple RAG architectures and analyzing their behavior, FinSight will provide meaningful insights into the effectiveness of advanced retrieval strategies in real-world applications.
+## **11. Conclusion**
+This project aims to bridge **practical system development** and **research-driven evaluation** in the domain of financial QA. We systematically studied how RAG components behave under different query types and derived actionable design insights to obtain the most ideal RAG pipeline in accordance to the results.
 
 ---
