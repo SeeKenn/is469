@@ -4,9 +4,10 @@ A question-answering system over **official Microsoft Corporation SEC filings on
 
 | Variant | Pipeline | Description |
 |---------|----------|-------------|
-| **V1 Baseline** | Dense → Generate | Fixed-size chunking + embedding retrieval |
-| **V2 Advanced A** | Dense → Rerank → Generate | Dense retrieval + cross-encoder reranking |
-| **V3 Advanced B** | BM25 + Dense → RRF → Rerank → Generate | Hybrid retrieval + RRF fusion + reranking |
+| **V0 Baseline** | User Query → Generate | No RAG involvement |
+| **V1 Advanced A** | Dense → Generate | Fixed-size chunking + embedding retrieval |
+| **V2 Advanced B** | Dense → Rerank → Generate | Dense retrieval + cross-encoder reranking |
+| **V3 Advanced V** | BM25 + Dense → RRF → Rerank → Generate | Hybrid retrieval + RRF fusion + reranking |
 
 ---
 
