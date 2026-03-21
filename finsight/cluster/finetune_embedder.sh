@@ -27,7 +27,7 @@ mkdir -p cluster/logs models/finsight-embedder data/finetune
 
 # ── Ensure required packages are present ─────────────────────────────────────
 echo "Checking dependencies ..."
-pip install -q --user datasets accelerate 2>/dev/null || true
+pip install -q --user "sentence-transformers>=3.3.0" datasets accelerate 2>/dev/null || true
 
 # ── Step 1: Generate training data (if not already done) ─────────────────────
 if [ ! -f data/finetune/embedder_train.json ]; then
