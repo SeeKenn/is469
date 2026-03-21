@@ -6,7 +6,7 @@
 
 #SBATCH --job-name=finsight-emb-ft
 #SBATCH --partition=student
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:a40:1
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=4
 #SBATCH --time=01:00:00
@@ -24,6 +24,10 @@ echo "=============================================="
 
 cd ~/is469/finsight
 mkdir -p cluster/logs models/finsight-embedder data/finetune
+
+# ── Ensure required packages are present ─────────────────────────────────────
+echo "Checking dependencies ..."
+pip install -q --user datasets accelerate 2>/dev/null || true
 
 # ── Step 1: Generate training data (if not already done) ─────────────────────
 if [ ! -f data/finetune/embedder_train.json ]; then
