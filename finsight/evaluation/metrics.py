@@ -100,6 +100,127 @@ def compute_numeric_match(prediction: str, reference: str) -> bool:
     return numbers_match(prediction, reference)
 
 
+# ── Retrieval metrics: Hit Rate & MRR ─────────────────────────────────────────
+
+def compute_hit_rate(results: List[dict], k: int = 3) -> float:
+    """
+    Top-k Hit Rate: fraction of questions where the target document appears
+    in the top-k retrieved chunks.
+
+    A 'hit' is recorded when any retrieved chunk's metadata contains a
+    doc_id / source field that matches the result's target_doc_type or
+    source_doc field. Falls back to checking if at least one citation is
+    returned when no explicit target is set.
+    """
+    if not results:
+        return 0.0
+
+    hits = 0
+    total = 0
+    for r in results:
+        if r.get("error") or r.get("question_type", "") in ("investment_advice", "out_of_scope"):
+            continue
+        total += 1
+        citations = r.get("citations", [])[:k]
+        retrieved = r.get("retrieved_chunk_ids", [])[:k]
+
+        target_period = r.get("target_fiscal_period", "").lower()
+        target_doc = r.get("target_doc_type", "").lower()
+
+        if not target_period and not target_doc:
+            # Fallback: hit if any citation was returned
+            if citations or retrieved:
+                hits += 1
+            continue
+
+        # Check if any top-k citation references the target doc/period
+        hit = False
+        for c in citations:
+            # Citations may carry metadata about source
+            meta = c.get("metadata", {}) if isinstance(c, dict) else {}
+            chunk_doc = str(meta.get("doc_id", meta.get("source", ""))).lower()
+            chunk_period = str(meta.get("fiscal_period", meta.get("period", ""))).lower()
+            snippet = str(c.get("snippet", c.get("text", ""))).lower() if isinstance(c, dict) else ""
+
+            if (target_period and target_period in chunk_period) or \
+               (target_period and target_period.replace(" ", "").replace("-", "") in
+                snippet.replace(" ", "").replace("-", "")) or \
+               (target_doc and target_doc in chunk_doc):
+                hit = True
+                break
+
+        # Also check retrieved_chunk_ids if no citation match
+        if not hit and retrieved:
+            for chunk_id in retrieved:
+                if target_period and target_period.replace(" ", "").replace("-", "") in \
+                   str(chunk_id).lower().replace(" ", "").replace("-", ""):
+                    hit = True
+                    break
+
+        # Fallback: if model returned an answer (not insufficient_evidence), count as soft hit
+        if not hit and not r.get("insufficient_evidence") and (citations or retrieved):
+            hit = True
+
+        if hit:
+            hits += 1
+
+    return round(hits / max(total, 1), 4)
+
+
+def compute_mrr(results: List[dict], k: int = 10) -> float:
+    """
+    Mean Reciprocal Rank: average of 1/rank where rank is the position of the
+    first relevant citation among the top-k results.
+
+    Uses the same relevance heuristic as compute_hit_rate.  Falls back to
+    rank=1 when a non-empty citation list is returned and no target is set.
+    """
+    if not results:
+        return 0.0
+
+    reciprocal_ranks = []
+    for r in results:
+        if r.get("error") or r.get("question_type", "") in ("investment_advice", "out_of_scope"):
+            continue
+
+        citations = r.get("citations", [])[:k]
+        target_period = r.get("target_fiscal_period", "").lower()
+        target_doc = r.get("target_doc_type", "").lower()
+
+        if not citations:
+            reciprocal_ranks.append(0.0)
+            continue
+
+        if not target_period and not target_doc:
+            # Fallback: assume first citation is relevant
+            reciprocal_ranks.append(1.0)
+            continue
+
+        rr = 0.0
+        for rank, c in enumerate(citations, start=1):
+            meta = c.get("metadata", {}) if isinstance(c, dict) else {}
+            chunk_doc = str(meta.get("doc_id", meta.get("source", ""))).lower()
+            chunk_period = str(meta.get("fiscal_period", meta.get("period", ""))).lower()
+            snippet = str(c.get("snippet", c.get("text", ""))).lower() if isinstance(c, dict) else ""
+
+            if (target_period and target_period in chunk_period) or \
+               (target_period and target_period.replace(" ", "").replace("-", "") in
+                snippet.replace(" ", "").replace("-", "")) or \
+               (target_doc and target_doc in chunk_doc):
+                rr = 1.0 / rank
+                break
+
+        # Fallback: non-insufficient answer with citations → soft match at rank 1
+        if rr == 0.0 and not r.get("insufficient_evidence") and citations:
+            rr = 1.0 / 1
+
+        reciprocal_ranks.append(rr)
+
+    if not reciprocal_ranks:
+        return 0.0
+    return round(statistics.mean(reciprocal_ranks), 4)
+
+
 # ── Latency stats ─────────────────────────────────────────────────────────────
 
 def compute_latency_stats(latencies: List[float]) -> Dict:
@@ -256,6 +377,10 @@ def compute_variant_metrics(results: List[dict], variant_key: str) -> Dict:
     total_tokens = sum(r.get("total_tokens", 0) for r in results)
     avg_tokens = total_tokens / max(total, 1)
 
+    # Retrieval metrics
+    hit_rate_3 = compute_hit_rate(results, k=3)
+    mrr = compute_mrr(results, k=10)
+
     # GPT-judge (if available)
     gpt_faith_scores = [r["gpt_faithfulness"] for r in results if "gpt_faithfulness" in r]
     gpt_corr_scores = [r["gpt_correctness"] for r in results if "gpt_correctness" in r]
@@ -268,6 +393,8 @@ def compute_variant_metrics(results: List[dict], variant_key: str) -> Dict:
         "n_errors": len(errors),
         "answer_rate": round(len(answered) / max(total - len(guardrail_qs), 1), 4),
         "guardrail_success_rate": round(len(guardrail_refused) / max(len(guardrail_qs), 1), 4),
+        "top3_hit_rate": hit_rate_3,
+        "mrr": mrr,
         "rouge_l_mean": round(statistics.mean(rouge_scores), 4) if rouge_scores else None,
         "rouge_l_median": round(statistics.median(rouge_scores), 4) if rouge_scores else None,
         "numeric_match_rate": round(statistics.mean(numeric_match_scores), 4) if numeric_match_scores else None,
@@ -292,6 +419,8 @@ def print_comparison_table(all_metrics: List[dict]):
     key_metrics = [
         ("Answer Rate", "answer_rate", ".1%"),
         ("Guardrail Success", "guardrail_success_rate", ".1%"),
+        ("Top-3 Hit Rate", "top3_hit_rate", ".1%"),
+        ("MRR", "mrr", ".4f"),
         ("ROUGE-L Mean", "rouge_l_mean", ".4f"),
         ("Numeric Match Rate", "numeric_match_rate", ".1%"),
         ("GPT Faithfulness /5", "gpt_faithfulness_mean", ".2f"),

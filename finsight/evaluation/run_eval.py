@@ -29,9 +29,13 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 VARIANTS = {
+    "v0_llm_only": ("src.pipeline.llm_only", "LLMOnlyPipeline"),
     "v1_baseline": ("src.pipeline.baseline", "BaselinePipeline"),
     "v2_advanced_a": ("src.pipeline.advanced_a", "AdvancedAPipeline"),
     "v3_advanced_b": ("src.pipeline.advanced_b", "AdvancedBPipeline"),
+    "v4_advanced_c": ("src.pipeline.advanced_c", "AdvancedCPipeline"),
+    "v5_advanced_d": ("src.pipeline.advanced_d", "AdvancedDPipeline"),
+    "v6_advanced_e": ("src.pipeline.advanced_e", "AdvancedEPipeline"),
 }
 
 # Question types to exclude from automated metric scoring (handled separately)
@@ -208,7 +212,7 @@ def main():
     parser.add_argument("--output", default="evaluation/results")
     parser.add_argument("--variants", nargs="+", default=list(VARIANTS.keys()),
                         choices=list(VARIANTS.keys()),
-                        help="Which variants to evaluate (default: all three)")
+                        help="Which variants to evaluate (default: all seven)")
     parser.add_argument("--limit", type=int, default=None,
                         help="Limit to first N questions (for testing)")
     parser.add_argument("--skip-guardrail-tests", action="store_true",

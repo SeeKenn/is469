@@ -107,15 +107,23 @@ st.markdown("""
 # ── Pipeline loader (cached) ───────────────────────────────────────────────────
 @st.cache_resource(show_spinner="Loading AI models — this takes ~30 seconds on first run...")
 def load_pipelines():
-    """Load all three pipeline variants once and cache them across sessions."""
+    """Load all seven pipeline variants once and cache them across sessions."""
+    from src.pipeline.llm_only import LLMOnlyPipeline
     from src.pipeline.baseline import BaselinePipeline
     from src.pipeline.advanced_a import AdvancedAPipeline
     from src.pipeline.advanced_b import AdvancedBPipeline
+    from src.pipeline.advanced_c import AdvancedCPipeline
+    from src.pipeline.advanced_d import AdvancedDPipeline
+    from src.pipeline.advanced_e import AdvancedEPipeline
 
     return {
+        "V0 — LLM Only (No Retrieval)": LLMOnlyPipeline(),
         "V1 — Baseline (Dense)": BaselinePipeline(),
         "V2 — Advanced A (Dense + Rerank)": AdvancedAPipeline(),
         "V3 — Advanced B (Hybrid + Rerank)": AdvancedBPipeline(),
+        "V4 — Advanced C (Query Rewrite + Hybrid)": AdvancedCPipeline(),
+        "V5 — Advanced D (Metadata Filter + Dense)": AdvancedDPipeline(),
+        "V6 — Advanced E (Hybrid + Compression)": AdvancedEPipeline(),
     }
 
 
@@ -201,9 +209,13 @@ def render_chunk_card(chunk: dict, idx: int):
 
 def variant_description(method: str) -> str:
     descriptions = {
+        "V0 — LLM Only (No Retrieval)": "No retrieval — LLM answers from training data only. Hallucination baseline.",
         "V1 — Baseline (Dense)": "Dense vector retrieval only. Fast, good for direct factual lookups.",
         "V2 — Advanced A (Dense + Rerank)": "Dense retrieval with cross-encoder reranking. Better precision, fewer hallucinations.",
         "V3 — Advanced B (Hybrid + Rerank)": "BM25 + dense retrieval fused by RRF, then reranked. Best for keyword-rich and complex queries.",
+        "V4 — Advanced C (Query Rewrite + Hybrid)": "LLM rewrites the query before hybrid retrieval + reranking. Best for ambiguous questions.",
+        "V5 — Advanced D (Metadata Filter + Dense)": "Fiscal period / doc-type filtering before dense retrieval. Best for temporal queries.",
+        "V6 — Advanced E (Hybrid + Compression)": "Hybrid retrieval + reranking + context compression. Best faithfulness, reduces noise.",
     }
     return descriptions.get(method, "")
 
@@ -216,11 +228,15 @@ with st.sidebar:
     method = st.radio(
         "Retrieval Method",
         options=[
+            "V0 — LLM Only (No Retrieval)",
             "V1 — Baseline (Dense)",
             "V2 — Advanced A (Dense + Rerank)",
             "V3 — Advanced B (Hybrid + Rerank)",
+            "V4 — Advanced C (Query Rewrite + Hybrid)",
+            "V5 — Advanced D (Metadata Filter + Dense)",
+            "V6 — Advanced E (Hybrid + Compression)",
         ],
-        index=2,
+        index=3,
         help="Select the RAG variant to use for this query",
     )
     st.caption(variant_description(method))
@@ -409,6 +425,15 @@ if submit and question.strip():
             "n_citations": len(citations),
             "fusion_stats": result.get("fusion_stats"),
         }
+        # V4-specific: query rewrite info
+        if result.get("query_rewrite"):
+            debug_data["query_rewrite"] = result["query_rewrite"]
+        # V5-specific: metadata filter info
+        if result.get("metadata_filter"):
+            debug_data["metadata_filter"] = result["metadata_filter"]
+        # V6-specific: compression stats
+        if result.get("compression_stats"):
+            debug_data["compression_stats"] = result["compression_stats"]
         st.json(debug_data)
 
 elif submit and not question.strip():
