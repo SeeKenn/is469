@@ -126,11 +126,15 @@ class AdvancedCPipeline:
         search_query = rewrite_result["rewritten_query"]
 
         # Step 2: Hybrid retrieval using rewritten query
+        t_retrieval = time.time()
         candidates = self.retriever.retrieve(search_query)
+        retrieval_latency = (time.time() - t_retrieval) * 1000
 
         # Step 3: Rerank — use ORIGINAL question for semantic relevance scoring
         # (rewritten query is optimised for retrieval, not for relevance judgment)
+        t_rerank = time.time()
         reranked = self.reranker.rerank(question, candidates, top_k=rerank_top_k)
+        reranking_latency = (time.time() - t_rerank) * 1000
 
         # Step 4: Fiscal period lock (same as V3)
         period_slots = int(self.cfg.get("retrieval", {}).get("period_guaranteed_slots", 3))
@@ -149,7 +153,9 @@ class AdvancedCPipeline:
             context_chunks = reranked[:final_context_k]
 
         # Step 5: Generate — use original question (not rewritten)
+        t_gen = time.time()
         gen_result = self.generator.generate(question, context_chunks)
+        generation_latency = (time.time() - t_gen) * 1000
 
         # Step 6: Citations
         citations = format_citations(gen_result["answer"], context_chunks)
@@ -168,7 +174,10 @@ class AdvancedCPipeline:
             "all_candidates": candidates,
             "context_used": gen_result.get("context_used", ""),
             "latency_ms": round(total_latency, 2),
-            "generation_latency_ms": gen_result.get("latency_ms", 0),
+            "retrieval_latency_ms": round(retrieval_latency, 2),
+            "reranking_latency_ms": round(reranking_latency, 2),
+            "rewrite_latency_ms": round(rewrite_result["rewrite_latency_ms"], 2),
+            "generation_latency_ms": round(generation_latency, 2),
             "variant": self.VARIANT_NAME,
             "model": gen_result.get("model", ""),
             "insufficient_evidence": gen_result.get("insufficient_evidence", False),

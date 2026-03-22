@@ -81,7 +81,9 @@ class LLMOnlyPipeline:
             "retrieved_chunks": [],         # no retrieval
             "context_used": "",             # no context
             "latency_ms": round(total_latency, 2),
-            "generation_latency_ms": raw.get("latency_ms", 0),
+            "retrieval_latency_ms": 0,
+            "reranking_latency_ms": 0,
+            "generation_latency_ms": round(total_latency, 2),
             "variant": self.VARIANT_NAME,
             "model": raw.get("model", ""),
             "insufficient_evidence": False,

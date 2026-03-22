@@ -58,10 +58,14 @@ class BaselinePipeline:
         top_k = self.cfg["retrieval"]["final_context_k"]
 
         # Retrieve
+        t_retrieval = time.time()
         retrieved = self.retriever.retrieve(question, top_k=top_k)
+        retrieval_latency = (time.time() - t_retrieval) * 1000
 
         # Generate
+        t_gen = time.time()
         gen_result = self.generator.generate(question, retrieved)
+        generation_latency = (time.time() - t_gen) * 1000
 
         # Format citations
         citations = format_citations(gen_result["answer"], retrieved)
@@ -74,7 +78,9 @@ class BaselinePipeline:
             "retrieved_chunks": retrieved,
             "context_used": gen_result.get("context_used", ""),
             "latency_ms": round(total_latency, 2),
-            "generation_latency_ms": gen_result.get("latency_ms", 0),
+            "retrieval_latency_ms": round(retrieval_latency, 2),
+            "reranking_latency_ms": 0,
+            "generation_latency_ms": round(generation_latency, 2),
             "variant": self.VARIANT_NAME,
             "model": gen_result.get("model", ""),
             "insufficient_evidence": gen_result.get("insufficient_evidence", False),

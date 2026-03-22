@@ -133,10 +133,14 @@ class AdvancedEPipeline:
         final_context_k = self.cfg["retrieval"]["final_context_k"]
 
         # Step 1: Hybrid retrieval
+        t_retrieval = time.time()
         candidates = self.retriever.retrieve(question)
+        retrieval_latency = (time.time() - t_retrieval) * 1000
 
         # Step 2: Rerank
+        t_rerank = time.time()
         reranked = self.reranker.rerank(question, candidates, top_k=rerank_top_k)
+        reranking_latency = (time.time() - t_rerank) * 1000
 
         # Step 3: Fiscal period lock (same as V3)
         period_slots = int(self.cfg.get("retrieval", {}).get("period_guaranteed_slots", 3))
@@ -160,7 +164,9 @@ class AdvancedEPipeline:
         compression_latency = (time.time() - t_compress) * 1000
 
         # Step 5: Generate
+        t_gen = time.time()
         gen_result = self.generator.generate(question, context_chunks)
+        generation_latency = (time.time() - t_gen) * 1000
 
         # Step 6: Citations
         citations = format_citations(gen_result["answer"], context_chunks)
@@ -184,7 +190,10 @@ class AdvancedEPipeline:
             "all_candidates": candidates,
             "context_used": gen_result.get("context_used", ""),
             "latency_ms": round(total_latency, 2),
-            "generation_latency_ms": gen_result.get("latency_ms", 0),
+            "retrieval_latency_ms": round(retrieval_latency, 2),
+            "reranking_latency_ms": round(reranking_latency, 2),
+            "compression_latency_ms": round(compression_latency, 2),
+            "generation_latency_ms": round(generation_latency, 2),
             "variant": self.VARIANT_NAME,
             "model": gen_result.get("model", ""),
             "insufficient_evidence": gen_result.get("insufficient_evidence", False),

@@ -2,15 +2,20 @@
 run_evaluation.py
 RAGAS-based evaluation pipeline for FinSight.
 
-Runs every question from eval_dataset.json through both "baseline" and "advanced"
-retrieval modes, computes RAGAS metrics (faithfulness, answer_relevancy,
+Runs every question from eval_dataset.json through all 7 pipeline variants
+(V0–V6), computes RAGAS metrics (faithfulness, answer_relevancy,
 context_recall, context_precision), and saves a side-by-side comparison.
 
-Uses the same qwen2.5-14b via vLLM (http://localhost:8000/v1) as the RAGAS judge LLM.
+Aligned with outline §6.2 (quantitative evaluation) and §6.3 (category-based).
+
+Uses the same qwen2.5-14b via vLLM (http://localhost:8000/v1) as the RAGAS
+judge LLM.
 
 Usage:
     python evaluation/run_evaluation.py
     python evaluation/run_evaluation.py --limit 5
+    python evaluation/run_evaluation.py --variants v1_baseline v3_advanced_b
+    python evaluation/run_evaluation.py --skip-ragas
 """
 
 import sys
@@ -19,6 +24,7 @@ import time
 import argparse
 from pathlib import Path
 from datetime import datetime
+from collections import defaultdict
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -27,6 +33,20 @@ from src.utils.config_loader import load_config
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# ── Variant registry (matches src/pipeline/__init__.py) ──────────────────────
+
+VARIANTS = {
+    "v0_llm_only":    ("src.pipeline.llm_only",    "LLMOnlyPipeline"),
+    "v1_baseline":    ("src.pipeline.baseline",     "BaselinePipeline"),
+    "v2_advanced_a":  ("src.pipeline.advanced_a",   "AdvancedAPipeline"),
+    "v3_advanced_b":  ("src.pipeline.advanced_b",   "AdvancedBPipeline"),
+    "v4_advanced_c":  ("src.pipeline.advanced_c",   "AdvancedCPipeline"),
+    "v5_advanced_d":  ("src.pipeline.advanced_d",   "AdvancedDPipeline"),
+    "v6_advanced_e":  ("src.pipeline.advanced_e",   "AdvancedEPipeline"),
+}
+
+VARIANT_ORDER = list(VARIANTS.keys())
 
 
 def load_eval_dataset(path: str) -> list:
@@ -37,49 +57,23 @@ def load_eval_dataset(path: str) -> list:
     return dataset
 
 
-def build_pipeline(mode: str, cfg: dict):
-    """Build the appropriate pipeline for the given mode."""
-    if mode == "baseline":
-        from src.pipeline.baseline import BaselinePipeline
-        from src.generation.citation_formatter import format_citations
-
-        class _BaselineMode:
-            VARIANT_NAME = "baseline_mode"
-
-            def __init__(self, cfg):
-                self._pipeline = BaselinePipeline(cfg)
-                self._top_k = cfg["retrieval"].get("baseline_top_k", 5)
-
-            def ask(self, question: str) -> dict:
-                t0 = time.time()
-                retrieved = self._pipeline.retriever.retrieve(question, top_k=self._top_k)
-                gen_result = self._pipeline.generator.generate(question, retrieved)
-                citations = format_citations(gen_result["answer"], retrieved)
-                total_latency = (time.time() - t0) * 1000
-                return {
-                    "answer": gen_result["answer"],
-                    "citations": citations,
-                    "retrieved_chunks": retrieved,
-                    "context_used": gen_result.get("context_used", ""),
-                    "latency_ms": round(total_latency, 2),
-                    "variant": "baseline_mode",
-                    "model": gen_result.get("model", ""),
-                    "insufficient_evidence": gen_result.get("insufficient_evidence", False),
-                    "error": gen_result.get("error"),
-                }
-
-        return _BaselineMode(cfg)
-    else:
-        from src.pipeline.advanced_b import AdvancedBPipeline
-        return AdvancedBPipeline(cfg)
+def build_pipeline(variant_key: str, cfg: dict):
+    """Dynamically import and instantiate a pipeline variant."""
+    module_path, class_name = VARIANTS[variant_key]
+    import importlib
+    mod = importlib.import_module(module_path)
+    cls = getattr(mod, class_name)
+    return cls(cfg)
 
 
-def run_questions(pipeline, dataset: list) -> list:
-    """Run all questions through a pipeline, collecting results."""
+def run_questions(pipeline, dataset: list, variant_key: str) -> list:
+    """Run all questions through a pipeline, collecting results with category."""
     results = []
     for i, item in enumerate(dataset, 1):
         question = item["question"]
         ground_truth = item["ground_truth"]
+        category = item.get("category", "")
+        source_doc = item.get("source_doc", "")
         logger.info(f"  [{i}/{len(dataset)}] {item['id']}: {question[:60]}...")
 
         t0 = time.time()
@@ -97,9 +91,14 @@ def run_questions(pipeline, dataset: list) -> list:
                 "answer": result.get("answer", ""),
                 "contexts": contexts,
                 "ground_truth": ground_truth,
-                "category": item.get("category", ""),
-                "source_doc": item.get("source_doc", ""),
+                "category": category,
+                "source_doc": source_doc,
+                "variant": variant_key,
                 "latency_seconds": round(latency_s, 3),
+                "retrieval_latency_ms": result.get("retrieval_latency_ms", 0),
+                "reranking_latency_ms": result.get("reranking_latency_ms", 0),
+                "generation_latency_ms": result.get("generation_latency_ms", 0),
+                "insufficient_evidence": result.get("insufficient_evidence", False),
                 "error": result.get("error"),
             })
             logger.info(f"    -> {latency_s:.1f}s | answered")
@@ -112,9 +111,14 @@ def run_questions(pipeline, dataset: list) -> list:
                 "answer": f"ERROR: {e}",
                 "contexts": [],
                 "ground_truth": ground_truth,
-                "category": item.get("category", ""),
-                "source_doc": item.get("source_doc", ""),
+                "category": category,
+                "source_doc": source_doc,
+                "variant": variant_key,
                 "latency_seconds": round(latency_s, 3),
+                "retrieval_latency_ms": 0,
+                "reranking_latency_ms": 0,
+                "generation_latency_ms": 0,
+                "insufficient_evidence": False,
                 "error": str(e),
             })
 
@@ -177,7 +181,6 @@ def compute_ragas_metrics(results: list, cfg: dict) -> dict:
     )
 
     # Limit concurrency to 2 so the local vLLM isn't flooded with parallel judge requests.
-    # max_retries=3 handles transient timeouts gracefully.
     ragas_run_cfg = RunConfig(
         timeout=timeout_s,
         max_workers=2,
@@ -213,9 +216,8 @@ def compute_ragas_metrics(results: list, cfg: dict) -> dict:
             embeddings=judge_embeddings,
             run_config=ragas_run_cfg,
         )
-        # EvaluationResult supports [] access (not .get())
-        # Values may be per-question lists — compute mean if so
         import numpy as np
+
         def _safe_mean(val):
             if isinstance(val, (list, np.ndarray)):
                 clean = [v for v in val if v is not None and not (isinstance(v, float) and np.isnan(v))]
@@ -228,6 +230,21 @@ def compute_ragas_metrics(results: list, cfg: dict) -> dict:
             "context_recall": round(_safe_mean(eval_result["context_recall"]), 4),
             "context_precision": round(_safe_mean(eval_result["context_precision"]), 4),
         }
+
+        # ── Per-question RAGAS scores for category breakdown (§6.3) ───────
+        per_question_ragas = []
+        for idx, r in enumerate(valid_results):
+            pq = {"id": r["id"], "category": r.get("category", "")}
+            for metric_name in ["faithfulness", "answer_relevancy", "context_recall", "context_precision"]:
+                val = eval_result[metric_name]
+                if isinstance(val, (list, np.ndarray)) and idx < len(val):
+                    pq[metric_name] = float(val[idx]) if val[idx] is not None else None
+                else:
+                    pq[metric_name] = None
+            per_question_ragas.append(pq)
+
+        scores["per_question_ragas"] = per_question_ragas
+
     except Exception as e:
         logger.error(f"RAGAS evaluation failed: {e}")
         logger.info("Falling back to manual metric computation...")
@@ -241,39 +258,96 @@ def compute_ragas_metrics(results: list, cfg: dict) -> dict:
     return scores
 
 
-def print_comparison_table(all_results: dict):
-    """Print a clean side-by-side comparison table."""
-    modes = list(all_results.keys())
-    metrics_keys = ["faithfulness", "answer_relevancy", "context_recall",
-                    "context_precision", "avg_latency_seconds"]
+def compute_category_ragas(per_question_ragas: list) -> dict:
+    """
+    Break down RAGAS scores by query category (outline §6.3).
 
-    header = f"{'Metric':<25}"
-    for mode in modes:
-        header += f" | {mode:>12}"
-    print("\n" + "=" * (25 + 15 * len(modes)))
-    print("  RAGAS EVALUATION RESULTS — FinSight")
-    print("=" * (25 + 15 * len(modes)))
+    Returns dict: category -> { metric -> mean_score }
+    """
+    import statistics as stats
+
+    cat_scores = defaultdict(lambda: defaultdict(list))
+    for pq in per_question_ragas:
+        cat = pq.get("category", "unknown")
+        for metric in ["faithfulness", "answer_relevancy", "context_recall", "context_precision"]:
+            val = pq.get(metric)
+            if val is not None:
+                cat_scores[cat][metric].append(val)
+
+    result = {}
+    for cat, metrics in cat_scores.items():
+        result[cat] = {
+            metric: round(stats.mean(vals), 4) if vals else 0.0
+            for metric, vals in metrics.items()
+        }
+    return result
+
+
+def print_comparison_table(all_results: dict):
+    """Print a clean side-by-side comparison table (outline §10.3)."""
+    variants = [v for v in VARIANT_ORDER if v in all_results]
+    metrics_keys = [
+        "faithfulness", "answer_relevancy", "context_recall",
+        "context_precision", "avg_latency_seconds",
+        "avg_retrieval_ms", "avg_reranking_ms", "avg_generation_ms",
+    ]
+
+    col_w = 14
+    header = f"{'Metric':<28}"
+    for v in variants:
+        header += f" | {v:>{col_w}}"
+    sep = "=" * (28 + (col_w + 3) * len(variants))
+
+    print(f"\n{sep}")
+    print("  RAGAS EVALUATION RESULTS — FinSight (Outline §6.2)")
+    print(sep)
     print(header)
-    print("-" * (25 + 15 * len(modes)))
+    print("-" * len(sep))
 
     for metric in metrics_keys:
-        row = f"{metric:<25}"
-        for mode in modes:
-            val = all_results[mode]["aggregate"].get(metric, 0.0)
-            row += f" | {val:>12.4f}"
+        row = f"{metric:<28}"
+        for v in variants:
+            val = all_results[v]["aggregate"].get(metric, 0.0)
+            if val is None:
+                row += f" | {'N/A':>{col_w}}"
+            elif metric.endswith("_ms"):
+                row += f" | {val:>{col_w}.0f}"
+            else:
+                row += f" | {val:>{col_w}.4f}"
         print(row)
 
-    print("-" * (25 + 15 * len(modes)))
-    row = f"{'n_questions':<25}"
-    for mode in modes:
-        n = len(all_results[mode]["per_question"])
-        row += f" | {n:>12}"
+    print("-" * len(sep))
+    row = f"{'n_questions':<28}"
+    for v in variants:
+        n = len(all_results[v]["per_question"])
+        row += f" | {n:>{col_w}}"
     print(row)
-    print("=" * (25 + 15 * len(modes)))
+    print(sep)
+
+    # ── Category breakdown (§6.3) ─────────────────────────────────────────
+    for v in variants:
+        cat_ragas = all_results[v]["aggregate"].get("category_ragas")
+        if cat_ragas:
+            print(f"\n  Category RAGAS — {v}")
+            cat_header = f"  {'Category':<24}" + "".join(
+                f"{'Faith':>8}{'Relev':>8}{'C.Rec':>8}{'C.Prec':>8}"
+            )
+            print(cat_header)
+            print("  " + "-" * 56)
+            for cat in ["factual_retrieval", "temporal_reasoning",
+                        "multi_hop_reasoning", "comparative_analysis"]:
+                scores = cat_ragas.get(cat, {})
+                print(
+                    f"  {cat:<24}"
+                    f"{scores.get('faithfulness', 0):>8.3f}"
+                    f"{scores.get('answer_relevancy', 0):>8.3f}"
+                    f"{scores.get('context_recall', 0):>8.3f}"
+                    f"{scores.get('context_precision', 0):>8.3f}"
+                )
 
 
 def main():
-    parser = argparse.ArgumentParser(description="FinSight RAGAS evaluation pipeline")
+    parser = argparse.ArgumentParser(description="FinSight RAGAS evaluation pipeline (V0–V6)")
     parser.add_argument(
         "--dataset",
         default="evaluation/eval_dataset.json",
@@ -291,11 +365,11 @@ def main():
         help="Limit to first N questions (for quick testing)",
     )
     parser.add_argument(
-        "--modes",
+        "--variants",
         nargs="+",
-        default=["baseline", "advanced"],
-        choices=["baseline", "advanced"],
-        help="Modes to evaluate (default: both)",
+        default=list(VARIANTS.keys()),
+        choices=list(VARIANTS.keys()),
+        help="Which variants to evaluate (default: all seven)",
     )
     parser.add_argument(
         "--skip-ragas",
@@ -318,21 +392,30 @@ def main():
 
     all_results = {}
 
-    for mode in args.modes:
+    for variant_key in args.variants:
         logger.info(f"\n{'=' * 60}")
-        logger.info(f"Evaluating mode: {mode}")
+        logger.info(f"Evaluating variant: {variant_key}")
         logger.info(f"{'=' * 60}")
 
-        pipeline = build_pipeline(mode, cfg)
-        per_question = run_questions(pipeline, dataset)
+        pipeline = build_pipeline(variant_key, cfg)
+        per_question = run_questions(pipeline, dataset, variant_key)
 
-        latencies = [r["latency_seconds"] for r in per_question if not r.get("error")]
-        avg_latency = sum(latencies) / max(len(latencies), 1)
+        valid = [r for r in per_question if not r.get("error")]
+        n_valid = max(len(valid), 1)
+        avg_latency = sum(r["latency_seconds"] for r in valid) / n_valid
+        avg_retrieval = sum(r.get("retrieval_latency_ms", 0) for r in valid) / n_valid
+        avg_reranking = sum(r.get("reranking_latency_ms", 0) for r in valid) / n_valid
+        avg_generation = sum(r.get("generation_latency_ms", 0) for r in valid) / n_valid
 
         # Save Q&A results immediately so they are not lost if RAGAS crashes.
-        all_results[mode] = {
+        all_results[variant_key] = {
             "per_question": per_question,
-            "aggregate": {"avg_latency_seconds": round(avg_latency, 4)},
+            "aggregate": {
+                "avg_latency_seconds": round(avg_latency, 4),
+                "avg_retrieval_ms": round(avg_retrieval, 2),
+                "avg_reranking_ms": round(avg_reranking, 2),
+                "avg_generation_ms": round(avg_generation, 2),
+            },
         }
         output_path = PROJECT_ROOT / args.output
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -341,20 +424,27 @@ def main():
         logger.info(f"Q&A results saved to {output_path}")
 
         if args.skip_ragas:
-            logger.info(f"Skipping RAGAS scoring for {mode} (--skip-ragas). Run rescore_ragas.py to score.")
+            logger.info(f"Skipping RAGAS scoring for {variant_key} (--skip-ragas).")
             continue
 
-        logger.info(f"Computing RAGAS metrics for {mode}...")
+        logger.info(f"Computing RAGAS metrics for {variant_key}...")
         ragas_scores = compute_ragas_metrics(per_question, cfg)
 
-        all_results[mode]["aggregate"] = {
-            **ragas_scores,
-            "avg_latency_seconds": round(avg_latency, 4),
-        }
-        logger.info(f"Mode {mode} complete: {json.dumps(all_results[mode]['aggregate'], indent=2)}")
+        # Category breakdown from per-question RAGAS
+        per_q_ragas = ragas_scores.pop("per_question_ragas", [])
+        category_ragas = compute_category_ragas(per_q_ragas) if per_q_ragas else {}
 
+        all_results[variant_key]["aggregate"].update(ragas_scores)
+        all_results[variant_key]["aggregate"]["category_ragas"] = category_ragas
+        all_results[variant_key]["per_question_ragas"] = per_q_ragas
+
+        logger.info(
+            f"Variant {variant_key} complete: "
+            f"{json.dumps({k: v for k, v in all_results[variant_key]['aggregate'].items() if k != 'category_ragas'}, indent=2)}"
+        )
+
+    # Final save
     output_path = PROJECT_ROOT / args.output
-    output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(all_results, f, indent=2, ensure_ascii=False)
     logger.info(f"\nResults saved to {output_path}")

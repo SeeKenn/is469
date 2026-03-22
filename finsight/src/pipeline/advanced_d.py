@@ -95,11 +95,14 @@ class AdvancedDPipeline:
         dense_top_k = self.cfg["retrieval"].get("dense_top_k", 20)
 
         # Step 1: Extract metadata filters from the question
+        t_filter = time.time()
         filter_info = self._build_metadata_filter(question)
+        filter_latency = (time.time() - t_filter) * 1000
         fiscal_filter = filter_info["fiscal_filter"]
         relaxed_filter = filter_info["relaxed_filter"]
 
         # Step 2: Retrieve with strict metadata filter
+        t_retrieval = time.time()
         retrieved = []
         filter_strategy = "none"
 
@@ -148,11 +151,15 @@ class AdvancedDPipeline:
             )
             filter_strategy = "auto"
 
+        retrieval_latency = (time.time() - t_retrieval) * 1000
+
         # Slice to final context size
         context_chunks = retrieved[:top_k]
 
         # Step 3: Generate
+        t_gen = time.time()
         gen_result = self.generator.generate(question, context_chunks)
+        generation_latency = (time.time() - t_gen) * 1000
 
         # Step 4: Citations
         citations = format_citations(gen_result["answer"], context_chunks)
@@ -165,7 +172,10 @@ class AdvancedDPipeline:
             "retrieved_chunks": context_chunks,
             "context_used": gen_result.get("context_used", ""),
             "latency_ms": round(total_latency, 2),
-            "generation_latency_ms": gen_result.get("latency_ms", 0),
+            "retrieval_latency_ms": round(retrieval_latency, 2),
+            "reranking_latency_ms": 0,
+            "filter_latency_ms": round(filter_latency, 2),
+            "generation_latency_ms": round(generation_latency, 2),
             "variant": self.VARIANT_NAME,
             "model": gen_result.get("model", ""),
             "insufficient_evidence": gen_result.get("insufficient_evidence", False),
