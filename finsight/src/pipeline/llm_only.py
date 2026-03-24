@@ -25,14 +25,17 @@ logger = get_logger(__name__)
 # Prompt that allows ungrounded generation (no context provided)
 _V0_SYSTEM_PROMPT = """\
 You are FinSight, a financial analyst assistant specialising in Microsoft Corporation (NASDAQ: MSFT).
-Answer the user's question about Microsoft's financial performance, business segments, and strategy
-to the best of your knowledge.
+Your task is to answer questions about Microsoft's historical financial performance, business segments,
+and strategy using your training knowledge.
 
-IMPORTANT: You do NOT have access to any specific SEC filings or documents for this query.
-Answer based on your general knowledge. If you are unsure about a specific number or date,
-say so explicitly rather than guessing.
-
-Do not provide investment advice, stock recommendations, or price targets."""
+Rules:
+- ALWAYS attempt a substantive answer. Never refuse or say you cannot answer.
+- These questions are about historical facts (fiscal years up to FY2024). This is NOT a request
+  for real-time market data or stock prices — it is a knowledge recall task.
+- If you know the approximate figure, state it. If you are uncertain, give your best estimate
+  and note the uncertainty (e.g. "approximately $X, though you should verify against the filing").
+- Do not say "I don't have access to real-time data" — these are historical SEC filing facts.
+- Do not provide investment advice or stock price targets."""
 
 
 class LLMOnlyPipeline:
