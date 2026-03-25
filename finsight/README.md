@@ -1,12 +1,16 @@
 # FinSight: RAG-Based Financial Filings QA — Microsoft Corporation (NASDAQ: MSFT)
 
-A question-answering system over **official Microsoft Corporation SEC filings only**, implementing and comparing three RAG variants:
+A question-answering system over **official Microsoft Corporation SEC filings only**, implementing and comparing **seven pipeline variants (V0–V6)**:
 
 | Variant | Pipeline | Description |
 |---------|----------|-------------|
+| **V0 LLM-Only** | Generate (no retrieval) | Hallucination baseline — no RAG |
 | **V1 Baseline** | Dense → Generate | Fixed-size chunking + embedding retrieval |
 | **V2 Advanced A** | Dense → Rerank → Generate | Dense retrieval + cross-encoder reranking |
 | **V3 Advanced B** | BM25 + Dense → RRF → Rerank → Generate | Hybrid retrieval + RRF fusion + reranking |
+| **V4 Advanced C** | Query Rewrite → Hybrid → Rerank → Generate | LLM query rewriting before hybrid retrieval |
+| **V5 Advanced D** | Metadata Filter → Dense → Rerank → Generate | Fiscal-period pre-filtering before dense search |
+| **V6 Advanced E** | Hybrid → Rerank → Compress → Generate | Context compression after reranking |
 
 ---
 
@@ -14,7 +18,7 @@ A question-answering system over **official Microsoft Corporation SEC filings on
 
 ```bash
 # 1. Clone and set up environment
-git clone https://github.com/<your-org>/finsight.git
+git clone https://github.com/cig-masteracc/finsight.git
 cd finsight
 python3.11 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
@@ -105,15 +109,15 @@ python scripts/run_query.py "How did Azure grow in Q1 FY2025?" --mode advanced
 ## Run Evaluation
 
 ```bash
-# Full RAGAS evaluation — both modes, all 20 questions
+# Full RAGAS evaluation — all 7 variants (V0–V6), 20 questions
 python evaluation/run_evaluation.py
 
 # Quick test — first 5 questions only
 python evaluation/run_evaluation.py --limit 5
 
-# Single mode
-python evaluation/run_evaluation.py --modes baseline
-python evaluation/run_evaluation.py --modes advanced
+# Single variant
+python evaluation/run_evaluation.py --variants v1_baseline
+python evaluation/run_evaluation.py --variants v3_advanced_b
 
 # Custom output path
 python evaluation/run_evaluation.py --output evaluation/results/my_run.json
@@ -154,7 +158,7 @@ finsight/
 │   ├── indexing/            # ChromaDB + BM25 index builders
 │   ├── retrieval/           # Dense, sparse, hybrid retrievers + reranker
 │   ├── generation/          # LLM generator + citation formatter
-│   ├── pipeline/            # V1/V2/V3 end-to-end pipelines
+│   ├── pipeline/            # V0–V6 end-to-end pipeline implementations
 │   └── utils/               # Config loader, logger
 ├── evaluation/
 │   ├── eval_dataset.json    # 20-question benchmark (4 categories)
