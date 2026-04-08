@@ -553,16 +553,33 @@ The most effective improvements come from precision-enhancing components (rerank
 
 The ablation study isolates each component's individual contribution:
 
-| Step | Variant | Component Added | Expected Benefit |
-|------|---------|-----------------|------------------|
-| 0 | V0 | None (LLM-only) | Hallucination floor |
-| 1 | V1 | + Dense Retrieval | Grounding, factual recall |
-| 2 | — | BM25 only | Lexical matching baseline |
-| 3 | — | Hybrid (no rerank) | Fusion benefit without reranking cost |
-| 4 | V3 | + Reranking | Precision improvement over raw hybrid |
-| 5 | V4 | + Query Rewriting | Retrieval for ambiguous queries |
-| 6 | V5 | + Metadata Filtering | Precision for temporal queries |
-| 7 | V6 | + Context Compression | Faithfulness for multi-hop queries |
+| Method | Retrieval Strategy | Avg Latency (s) | Answer Quality | Key Observation |
+|--------|--------------------|-----------------|----------------|-----------------|
+| Dense-only | Dense (embedding-based) | 9.73 | High (correct + derived) | Strong semantic retrieval but inefficient and verbose|
+| Sparse-only | BM25 (lexical) | 2.47 | Low (missing key figures) | Fast but fails on semantic matching |
+| Hybrid (no rerank) | BM25 + Dense (RRF) | 7.23 | High (concise + correct) | Combines lexical + semantic strengths effectively |
+| Hybrid + Rerank | Hybrid + Cross-encoder | 11.35 | High (slightly less precise numerically) | Improved ranking but diminishing returns vs cost |
+
+### Key observations
+
+1. Dense retrieval ensures completeness but introduces inefficiency
+  * The dense-only setup successfully retrieves semantically relevant chunks, enabling correct numerical derivations (e.g., gross margin calculation). However, its high latency (9.73s) and verbose reasoning indicate over-retrieval, where the model compensates for imperfect ranking by generating longer answers.
+    * This suggests that dense retrieval alone lacks precision in ordering the most relevant chunks early.
+
+2. Sparse retrieval is fast but insufficient for semantic queries
+  * BM25 achieves the lowest latency (2.47s), but fails to retrieve the exact figures required to answer the question. Instead, it surfaces loosely related financial commentary (e.g., margin trends), demonstrating that lexical matching alone cannot handle paraphrased or numerically grounded queries. This confirms that sparse retrieval lacks semantic coverage for financial QA tasks.
+
+3. Hybrid retrieval (without reranking) provides the best balance of accuracy and efficiency
+  * The hybrid approach successfully retrieves both the exact financial table (via lexical signals) and supporting semantic context (via embeddings). This results in a concise and correct answer with moderate latency (7.23s). The absence of reranking does not significantly harm answer quality, indicating that Reciprocal Rank Fusion (RRF) is already effective at prioritizing relevant documents.
+
+4. Reranking improves ordering but shows diminishing returns in end-task performance
+  * Adding cross-encoder reranking increases latency significantly (11.35s) while yielding only marginal gains in retrieval precision. In this case, it slightly degrades numerical accuracy (rounding to 70% instead of ~69.8%), suggesting that better-ranked context does not always translate to better generation. This highlights a key trade-off: reranking optimizes retrieval metrics more than final answer correctness.
+
+5. Lexical signals are critical for numerical extraction tasks
+  * Both hybrid variants outperform dense-only retrieval in producing concise, correct answers. This is because financial figures (e.g., “171,008”, “245,122”) are better matched through exact token overlap rather than semantic similarity. The failure of sparse-only retrieval, however, shows that lexical matching must be complemented by semantic retrieval to ensure coverage.
+
+6. Overall: Hybrid retrieval without reranking is the most cost-effective configuration
+  * Considering both latency and answer quality, the hybrid (no rerank) setup achieves the best trade-off. It captures the benefits of multi-retriever fusion while avoiding the computational overhead of cross-encoder reranking, making it a strong baseline for production systems.
 
 ```bash
 # Run the full 8-step ablation study
@@ -932,7 +949,7 @@ python evaluation/run_evaluation.py --skip-ragas
 # 4. Single variant
 python evaluation/run_evaluation.py --variants v3_advanced_b
 
-# 5. Ablation study (8 steps)
+# 5. Ablation study
 python evaluation/ablation_study.py
 
 # 6. Category and error analysis
