@@ -707,14 +707,16 @@ At the variant level, the weakest pipelines were **V2** and **V5** for retrieval
 
 | Component | Factual | Temporal | Multi-Hop | Comparative |
 |-----------|---------|----------|-----------|-------------|
-| Dense Retrieval (V1) | ✓✓ | ✗ | ✗ | ✗ |
-| + Reranking (V2) | ✓✓ | ✓ | ✓✓ | ✓ |
-| + Hybrid Retrieval (V3) | ✓✓ | ✓✓ | ✓✓ | ✓✓ |
-| + Query Rewriting (V4) | ✓ | ✓✓ | ✓✓ | ✓✓ |
-| + Metadata Filtering (V5) | ✓✓ | ✓✓✓ | ✓ | ✓ |
-| + Context Compression (V6) | ✓ | ✓ | ✓✓✓ | ✓✓ |
+| Dense Retrieval (V1) | ✓✓✓ | ✗ | ✗ | ✗ |
+| + Reranking (V2) | ✓ | ✗ | ✗ | ✗ |
+| + Hybrid Retrieval (V3) | ✓ | ✓✓✓ | ✓ | ✓✓ |
+| + Query Rewriting (V4) | ✗ | ✓✓ | ✓✓ | ✓✓✓ |
+| + Metadata Filtering (V5) | ✓ | ✓✓ | ✗ | ✗ |
+| + Context Compression (V6) | ✗ | ✓ | ✓✓✓ | ✓✓✓ |
 
 ✓✓✓ = primary strength, ✓✓ = strong improvement, ✓ = moderate improvement, ✗ = no improvement or degradation
+
+These labels are based on the saved category-level outcomes in Section 5, prioritising answer relevancy and numerical accuracy over intuition about what a component "should" help.
 
 **Core Finding:** No single pipeline variant dominates across all query types, confirming the study hypothesis. Optimal performance requires adaptive pipeline selection based on query characteristics.
 
