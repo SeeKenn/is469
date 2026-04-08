@@ -509,8 +509,8 @@ A notable anomaly persists: V0 (no retrieval) achieves 40% numerical accuracy on
 | V1 | 3.46 | 0.738 | Fastest RAG baseline; moderate grounding |
 | V2 | 4.50 | 0.843 | Higher faithfulness with modest latency increase (reranking) |
 | V3 | 7.71 | 0.786 | Higher latency from hybrid retrieval; moderate faithfulness |
-| V5 | 8.51 | 0.760 | Slower despite filtering; moderate faithfulness without reranking |
-| V4 | 3.63 | 0.803 | QStrong faithfulness with low latency; efficient query rewriting |
+| V4 | 8.51 | 0.760 | Slower despite filtering; moderate faithfulness without reranking |
+| V5 | 3.63 | 0.803 | QStrong faithfulness with low latency; efficient query rewriting |
 | V6 | 10.52 | 0.700 | Highest latency; compression overhead with reduced faithfulness |
 
 #### Key observations
