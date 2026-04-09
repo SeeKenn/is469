@@ -906,8 +906,8 @@ At the variant level, the weakest pipelines were **V2** and **V5** for retrieval
 | Dense Retrieval (V1) | ✓✓✓ | ✗ | ✗ | ✗ |
 | + Reranking (V2) | ✓ | ✗ | ✗ | ✗ |
 | + Hybrid Retrieval (V3) | ✓ | ✓✓✓ | ✓ | ✓✓ |
-| + Query Rewriting (V4) | ✗ | ✓✓ | ✓✓ | ✓✓✓ |
-| + Metadata Filtering (V5) | ✓ | ✓ | ✗ | ✗ |
+| + Query Rewriting (V4) | ✗ | ✓ | ✓✓ | ✓✓✓ |
+| + Metadata Filtering (V5) | ✓ | ✗ | ✗ | ✗ |
 | + Context Compression (V6) | ✗ | ✓ | ✓✓✓ | ✓✓✓ |
 
 ✓✓✓ = primary strength, ✓✓ = strong improvement, ✓ = moderate improvement, ✗ = no improvement or degradation
@@ -915,38 +915,52 @@ At the variant level, the weakest pipelines were **V2** and **V5** for retrieval
 These labels are based on the saved category-level outcomes in Section 5, prioritising answer relevancy and numerical accuracy over intuition about what a component "should" help.
 
 **Core Finding:** No single pipeline variant dominates across all query types, confirming the study hypothesis. Optimal performance requires adaptive pipeline selection based on query characteristics.
+*  Each component solves a specific retrieval or reasoning bottleneck, and the benefit only materialises when that bottleneck is the binding constraint for the query at hand. 
+  * This makes adaptive pipeline selection — routing queries to the appropriate variant — the most consequential design decision for a production financial RAG system.
 
 ---
 
 ### 7.2 Component-Level Insights
 
-#### Insight 1: Hybrid Retrieval Is Essential for Financial Queries
-Financial queries contain specific lexical markers — "FY2024", "Q1 FY2025", "$245.1 billion", "10-K" — that pure dense retrieval struggles to anchor on. BM25's exact term matching complements semantic search:
+#### Insight 1: Hybrid Retrieval Is the Minimum Viable Configuration for Cross-Period Financial Queries
 
-- **Dense-only (V1)** achieves 0.483 answer relevancy — it struggles with fiscal period discrimination and exact figure matching
-- **Hybrid (V3)** reaches 0.711 answer relevancy, a roughly 47% improvement, by combining semantic context understanding with BM25 lexical anchoring
+Dense-only retrieval (V1) is sufficient for factual lookups but fails on every query type requiring evidence from more than one filing period. Financial queries contain hard lexical markers — fiscal period labels ("Q1 FY2025"), exact dollar figures ("$245.1B"), filing type references ("10-K") — that semantic embeddings routinely fail to discriminate between semantically similar but temporally distinct chunks. BM25's exact term matching is not a refinement; for these queries, it is a prerequisite.
 
-The effect is strongest in comparative analysis: V3 achieves 0.726 comparative relevancy vs V1's 0.199, a 3.6× improvement driven by BM25 surfacing both fiscal periods simultaneously.
+The relevancy gap is most visible in comparative analysis: V3 reaches 0.726 relevancy against V1's 0.199 — a 3.6× lift driven by BM25 surfacing both fiscal endpoints simultaneously rather than the nearest semantic match. The aggregate relevancy improvement (V1: 0.483 → V3: 0.711) should not be read as a uniform lift across all query types; for factual queries, V1 already achieves 0.988 and V3 provides no meaningful gain. The 47% aggregate improvement is produced almost entirely by temporal and comparative queries, where lexical anchoring is decisive.
+
+**Operational implication:** Hybrid retrieval should be the baseline for any financial RAG system operating over multiple filing periods. Dense-only retrieval is acceptable only for narrowly scoped, single-document lookups.
 
 #### Insight 2: Reranking Delivers the Highest Faithfulness and Precision
-V2 adds about 1.04 seconds over V1 (4.50s vs 3.46s) while improving context precision from 0.607 to 0.741 and faithfulness from 0.738 to 0.843. V2 achieves the highest faithfulness of all seven variants, meaning its answers are the most tightly grounded in the retrieved context.
 
-The cross-encoder re-scores each query–chunk pair directly, filtering the noisiest candidates without requiring the full overhead of hybrid retrieval.
+V2 adds approximately 1 second of latency over V1 (4.50s vs 3.46s) and produces the largest faithfulness gain of any single component in the study: +0.105 (0.738 → 0.843) and +0.134 context precision (0.607 → 0.741). V2 achieves the highest faithfulness of all seven variants. This makes reranking the clearest return on added complexity in the pipeline.
+
+However, the cross-encoder reranker reorders evidence; it cannot recover evidence that was never retrieved. Answer relevancy is unchanged between V1 and V2 (0.483 vs 0.478). For query types that require broad coverage — temporal, multi-hop, comparative — reranking actively harms performance: V2 records the most retrieval failures of any variant (6 of 18 classified failures), precisely because aggressive re-scoring discards supporting chunks that would otherwise enable multi-step reasoning.
+
+**Operational implication:** Add reranking to any pipeline where faithfulness is the primary constraint, but never as a substitute for broader retrieval coverage. For complex multi-document queries, reranking compounds retrieval narrowness into evidence gaps.
 
 #### Insight 3: Metadata Filtering (V5) Achieves the Best Latency Efficiency
-V5 is the second-fastest RAG variant at 3.63s average latency — just behind V1 (3.46s) and far below the hybrid variants — while maintaining 0.804 faithfulness. Pre-filtering the ChromaDB search space by fiscal period metadata before running dense retrieval reduces retrieval noise without introducing reranking cost.
 
-Notably, **V5 intentionally omits the cross-encoder reranker** — the metadata filter is designed as a lower-cost substitute, confirmed by reranking latency = 0ms across all 20 evaluated questions.
+V5 is the second-fastest RAG variant at 3.63s and achieves 0.804 faithfulness — the second-highest in the study, without a reranker. For queries targeting a single, clearly identifiable fiscal period, pre-filtering the vector store before retrieval removes noise at near-zero cost. Its 80% temporal numerical accuracy matches the best-performing temporal pipelines.
 
-The trade-off: V5 requires consistent metadata tagging at ingest time. Its performance collapses on multi-hop queries spanning two fiscal years — reflected in 0% multi-hop numerical accuracy — because pre-filtering by one period excludes the other.
+Outside that scope, V5 fails predictably. Its temporal RAGAS relevancy (0.387) is identical to the V1 baseline, and its multi-hop numerical accuracy is 0%. Pre-filtering by one fiscal period structurally excludes all evidence from other periods. This is not a tuning issue; it is a design constraint. V5 is not a general temporal reasoning pipeline — it is a fast, reliable tool for period-specific lookups that would otherwise risk retrieving semantically similar but temporally incorrect chunks.
+
+**Operational implication:** V5 is the right choice when the fiscal period is deterministic from the query and a single filing is sufficient to answer it. It should not be used for any query requiring cross-period synthesis.
 
 #### Insight 4: Query Rewriting (V4) Strengthens Comparative Coverage
-V4 raises aggregate answer relevancy to 0.784 and delivers 80% comparative numerical accuracy, one of the joint-highest category-specific numerical accuracy scores in the study. Its context recall (0.463) is solid but not the highest overall, and the added query-rewrite + hybrid pipeline raises latency to 8.51s.
 
-V4 achieves 80% comparative numerical accuracy — tied with the best temporal results in the saved run — confirming its particular strength for multi-period synthesis questions.
+V4 achieves the highest aggregate answer relevancy (0.784), the highest comparative relevancy (0.867), and 80% comparative numerical accuracy — the top score in that category. By restructuring ambiguous or multi-part queries into clearer retrieval targets before sending them through hybrid retrieval, V4 improves the probability that all comparison targets are retrieved together.
+
+The cost is faithfulness. V4's aggregate faithfulness (0.760) is lower than V2 (0.843) and V5 (0.804). On temporal queries specifically, V4's faithfulness drops to 0.561, the lowest of any retrieval pipeline — substantially weaker than V3 (0.861) on the same category. Query rewriting is calibrated for comparative synthesis; it introduces retrieval noise on queries that do not benefit from reformulation.
+
+**Operational implication:** V4 is the preferred configuration for comparative and multi-period synthesis queries. It should not replace V3 for temporal queries, where V3 delivers both higher relevancy and substantially better grounding.
 
 #### Insight 5: Context Compression (V6) Targets Multi-Hop and Long-Context Failures
-V6 applies sentence-level extraction after reranking to distil financially relevant content before generation. It reaches 0.729 multi-hop relevancy, 0.884 comparative relevancy, and 55% aggregate numerical accuracy, but it is also the slowest variant at 10.52s. Compression is most beneficial when relevant evidence is scattered across many chunks and the generator needs a cleaner final context.
+
+V6 achieves the highest multi-hop relevancy (0.729) and the highest comparative relevancy (0.884), but at 10.52s average latency — the slowest variant by a significant margin, and 3× slower than V1. Sentence-level compression after reranking distils scattered evidence into a cleaner context before generation, which matters most when relevant information is spread across many chunks and the generator would otherwise be diluted by irrelevant surrounding text.
+
+Critically, V6's faithfulness (0.700) is the lowest of the retrieval pipelines. Compression improves synthesis at the cost of grounding: by filtering aggressively, V6 occasionally discards evidence that would have constrained the generator to supported claims.
+
+**Operational implication:** V6 is appropriate when multi-hop or comparative queries consistently fail on other pipelines and latency is not a constraint. In latency-sensitive environments, V4 provides comparable comparative performance at 2 fewer seconds on average (8.51s vs 10.52s).
 
 ---
 
@@ -955,14 +969,14 @@ V6 applies sentence-level extraction after reranking to distil financially relev
 | Variant | Primary Benefit (Query-Type Specific) | Best Query Type | Justification (Based on Pipeline) |
 |---------|--------------------------------------|-----------------|-----------------------------------|
 | V0 | Baseline for simple factual recall without grounding | Factual (limited) | No retrieval → relies on parametric knowledge; can partially answer common factual queries but fails on structured or time-specific questions |
-| V1 | Reliable single-document grounding for direct lookups | Factual | Dense retrieval surfaces semantically relevant chunks, which is sufficient for single-hop factual queries located within one document |
-| V2 | High-faithfulness grounding for precision-focused queries | Factual / Grounding | Reranking improves context precision and faithfulness most strongly on queries where the main challenge is selecting the cleanest evidence, not assembling many pieces across periods |
-| V3 | Strong cross-period retrieval for temporal and comparative queries | Temporal, Comparative | BM25 captures exact fiscal terms (e.g., “Q1 FY2025”) while dense retrieval captures semantics; RRF fusion ensures both periods are retrieved together |
-| V4 | Structured retrieval for comparative and multi-document queries | Comparative, Multi-Hop | Query rewriting expands ambiguous questions into clearer retrieval targets, which is especially helpful for cross-period comparisons and multi-document synthesis |
-| V5 | Fast and precise retrieval for single-period temporal queries | Temporal, Factual | Metadata filtering restricts search to a specific fiscal period, improving precision and speed when the query targets a known timeframe |
-| V6 | Noise-reduced context for complex multi-hop and comparative reasoning | Multi-Hop, Comparative | Compression removes irrelevant text after retrieval, helping the model focus on key facts needed to synthesise answers across multiple sources |
+| V1 | Reliable single-document grounding | Factual | Dense retrieval finds the correct chunk; simplicity is optimal when one chunk is sufficient |
+| V2 | Highest faithfulness and context precision | Factual, grounding-critical | Cross-encoder re-scoring maximises grounding quality; no coverage benefit beyond V1 |
+| V3 | Best balance of coverage and grounding for multi-period queries | Temporal, Comparative | BM25 anchors on fiscal period labels; RRF fusion retrieves multiple periods without collapsing faithfulness |
+| V4 | Strongest comparative and cross-period synthesis | Comparative | Query rewriting expands underspecified comparison targets; hybrid retrieval captures all comparison endpoints |
+| V5 | Fastest precision retrieval for known fiscal periods | Factual, single-period | Metadata filtering eliminates retrieval noise at near-zero cost; fails structurally on cross-period queries |
+| V6 | Best multi-hop evidence synthesis | Multi-Hop, Comparative | Compression reduces context noise for scattered multi-source evidence; highest relevancy on both task types |
 
-Each variant’s benefit is most pronounced when its pipeline modification directly addresses the dominant challenge of the query type — whether it is locating the correct document (V3, V5), structuring the query (V4), selecting precise evidence (V2), or filtering noise during synthesis (V6).
+**The central design principle that emerges from this analysis**: pipeline selection should be query-type-driven, not performance-maximising in aggregate. Optimising for aggregate RAGAS scores selects for balanced mediocrity. The same resources directed toward routing queries to their matched pipeline — factual to V1 or V2, temporal to V3, comparative to V4 or V6, multi-hop to V6 — will produce larger performance gains than any single pipeline improvement.
 
 ---
 
