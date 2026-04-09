@@ -790,9 +790,11 @@ The earlier qualitative matrix overstated some failure types. The table below is
 
 This makes the component pattern clearer, but it should still be read as **heuristic failure labeling rather than definitive root-cause attribution**. All 11 V0 failures were classified as generation failures; V1 and V5 are dominated by query-understanding failures; and V2, V3, V4, and V6 are dominated by retrieval failures in the saved classifier output.
 
-Two caveats matter. First, **ranking failure** and **chunking failure** appear as zero not because those issues are impossible, but because the current heuristic in [evaluation/category_analysis.py](evaluation/category_analysis.py) rarely surfaces them as separate labels; most such cases are absorbed into retrieval or generation failure. Second, the table should be read as a mapping of *observed dominant failure behaviour in this experiment*, not as a universal statement about what each component can or cannot do.
+Caveats:
+1. **Ranking failure** and **chunking failure** appear as zero not because those issues are impossible, but because the current heuristic in [evaluation/category_analysis.py](evaluation/category_analysis.py) rarely surfaces them as separate labels. Most such cases are absorbed into retrieval or generation failure. 
+2. The table should be read as a mapping of *observed dominant failure behaviour in this experiment*, not as a universal statement about what each component can or cannot do.
 
-From a systems perspective, the main takeaway is that adding retrieval components reduced pure hallucination sharply after V0, but the new bottleneck became **evidence selection and evidence alignment**, not raw answer generation. That shift is exactly what the case studies show: the stronger pipelines usually fail by missing or misassembling evidence, not by inventing unsupported claims from scratch.
+From a systems perspective, the main takeaway is that adding retrieval components reduced pure hallucination sharply after V0, but the new bottleneck became **evidence selection and evidence alignment**, not raw answer generation. This aligns with the case studies in showing that the stronger pipelines usually fail by missing or misassembling evidence, not by inventing unsupported claims from scratch.
 
 ### 6.3 Case Studies
 
