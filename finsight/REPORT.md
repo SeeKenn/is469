@@ -169,7 +169,7 @@ finsight/
 │   ├── eval_dataset.json      # 20-question benchmark (4 categories)
 │   ├── benchmark.csv          # Benchmark with extended metadata
 │   ├── run_evaluation.py      # RAGAS + numerical accuracy evaluation runner
-│   ├── ablation_study.py      # 4-step component ablation
+│   ├── ablation_study.py      # Four-configuration ablation
 │   ├── category_analysis.py   # Per-category breakdown and error analysis
 │   └── results/               # JSON result files per evaluation run
 ├── app/
