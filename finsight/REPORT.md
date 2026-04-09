@@ -1052,32 +1052,66 @@ Critically, V6's faithfulness (0.700) is the lowest of the retrieval pipelines. 
 
 ## 10. Conclusion
 
-### Study Hypothesis
+### 10.1 Study Hypothesis
 
 This project demonstrates that **RAG components provide selective, query-type-dependent benefits** — confirming the study hypothesis that no single pipeline is universally optimal.
+* This finding has direct consequences for how financial RAG systems should be designed: a fixed pipeline is an implicit choice to accept suboptimal performance on most query types in exchange for simplicity.
 
-### Overall Results
+#### Overall Results
 
-| Finding | Evidence |
-|---------|----------|
-| RAG vs. no RAG: critical for grounding | V0 faithfulness = 0.098 → V1 faithfulness = 0.738 |
-| Query rewriting achieves the highest overall answer relevancy | V4 = 0.784 vs V1 = 0.483 and V3 = 0.711 |
-| Reranking delivers the strongest grounding quality | V2 has the highest faithfulness (0.843) and context precision (0.741) |
-| Hybrid retrieval achieves the best aggregate numerical accuracy | V3 = 0.600, ahead of V6 = 0.550 and V4 = 0.500 |
-| Dense-only retrieval remains the fastest RAG baseline | V1 = 3.46s, slightly faster than V5 = 3.63s |
-| Comparative and multi-hop questions remain the most demanding | V1 scores only 0.199 on comparative relevancy and 0.357 on multi-hop relevancy, while advanced variants are required to recover performance |
+| Finding | Evidence | Strength |
+|---------|----------|----------|
+| Retrieval is necessary and non-negotiable for grounded financial QA | V0 faithfulness 0.098 → V1 faithfulness 0.738 | Definitive |
+| Hybrid retrieval (V3) is the minimum viable configuration for any cross-period query | V3 comparative relevancy 0.726 vs V1 0.199 (3.6× lift); V3 temporal relevancy 0.585 vs V1 0.387 | Definitive |
+| Reranking (V2) delivers the highest faithfulness-per-latency of any single component | +0.105 faithfulness, +0.134 context precision, +1.04s latency | Definitive |
+| Reranking harms multi-hop and comparative performance by over-filtering evidence | V2 records the most retrieval failures (6/18); multi-hop recall collapses to 0.133 | Strong |
+| Query rewriting (V4) is the strongest configuration for comparative synthesis | V4 comparative relevancy 0.867, numerical accuracy 80% | Strong |
+| Context compression (V6) is the strongest configuration for multi-hop synthesis | V6 multi-hop relevancy 0.729, comparative relevancy 0.884 | Strong |
+| V3, not V4, is the correct recommendation for temporal reasoning | V3 temporal: 0.585 relevancy, 0.861 faithfulness vs V4: 0.555 relevancy, 0.561 faithfulness | Strong |
+| Metadata filtering (V5) is a fast, brittle tool — effective only for single-period queries | 3.63s latency, 0.804 faithfulness, 0% multi-hop numerical accuracy | Moderate |
+| Benchmark contamination from parametric knowledge inflates V0 scores | V0 achieves 40% factual numerical accuracy without retrieval | Moderate (single-category observation) |
 
-### Recommendations for Financial RAG Systems
+---
 
-1. Use hybrid retrieval (dense + BM25) for fiscal-period-specific and cross-period comparison queries, where lexical anchors such as fiscal years and quarter labels matter.
-2. Apply cross-encoder reranking for highest context precision (V2, 0.741).
-3. Implement metadata pre-filtering as a low-latency precision improvement for narrowly scoped temporal queries with a clearly identifiable fiscal period.
-4. Use query rewriting (V4) or context compression (V6) for comparative and multi-hop questions.
-5. Maintain an LLM-only baseline to quantify the value added by each retrieval component, and ensure benchmark questions are genuinely unanswerable from model training data alone.
+### 10.2 Recommendations for Financial RAG Systems
+
+* **1. Adopt hybrid retrieval as the baseline, not dense-only.**
+  * Dense retrieval is the correct choice only for factual single-document lookups. Any system expected to handle temporal, comparative, or multi-hop queries should treat hybrid retrieval (BM25 + dense + RRF fusion) as the minimum viable configuration. \
+  * The cost is latency (~7.7s vs ~3.5s); the benefit is the difference between a 0.199 and a 0.726 comparative relevancy.
+
+* **2. Route queries by type; do not apply a single pipeline universally.**
+  * The performance spread between matched and mismatched pipelines is large enough to make adaptive routing a higher-priority investment than any further pipeline refinement. 
+    * Factual queries routed to V1 or V2 achieve near-ceiling performance (0.988 relevancy). 
+    * Comparative queries routed to V6 achieve 0.884 relevancy — the same queries routed to V1 achieve 0.199. 
+  * The cost of mismatching is severe; the cost of routing is a query classifier.
+
+* **3. Apply cross-encoder reranking for faithfulness-critical applications; remove it for multi-hop or comparative pipelines.**
+  * Reranking is not universally beneficial. For factual and grounding-critical queries, add it. 
+    * For multi-hop and comparative queries, it actively reduces coverage by discarding intermediate evidence. 
+  * If reranking is applied globally, it should be positioned downstream of broader retrieval and with a high enough top-k to retain supporting context.
+
+* **4. Reserve metadata filtering (V5) for high-volume, period-specific queries where latency matters.**
+  * V5's 3.63s latency and 0.804 faithfulness are compelling for narrowly scoped temporal lookups. 
+    * It should not be used for queries spanning multiple fiscal periods, which it will structurally fail to answer.
+
+* **5. Use query rewriting (V4) for comparative queries; use context compression (V6) for multi-hop queries.**
+  * These are the most complex task types in the benchmark, and they require different solutions. 
+    * V4's strength is in expanding underspecified comparison targets into retrievable queries. 
+    * V6's strength is in distilling scattered multi-document evidence into a coherent reasoning context. They should not be treated as interchangeable.
+
+* **6. Ensure benchmark questions are genuinely unanswerable without retrieval.**
+  * V0's 40% factual numerical accuracy demonstrates that questions answerable from parametric memory will overstate the measured contribution of retrieval. 
+  * For any future evaluation, questions should be validated against the LLM-only baseline and replaced if they can be answered without document access.
 
 FinSight demonstrates that thoughtful, component-level RAG design — combined with query-type-aware evaluation — produces both better systems and clearer research insights than aggregate benchmarking alone.
 
 ---
+
+### 10.3 What Remains Unresolved
+
+The most consistent failure mode across all variants — accounting for 60% of classified failures — is not retrieval miss or generation error but evidence misalignment: the system retrieves the correct documents but fails to organise them into a structure that supports the comparison, temporal sequence, or reasoning chain the query requires. This failure is pre-generative. No amount of prompt engineering or generator fine-tuning will fix it, because the problem occurs before the generator receives its input. The next generation of improvements for financial RAG must target structured retrieval — preserving table rows intact across chunks, explicitly representing fiscal period relationships in metadata, and building retrieval pipelines that return evidence in the form the reasoning task demands, not just evidence that is semantically proximate to the query.
+
+FinSight demonstrates that component-level RAG design, evaluated with query-type sensitivity, surfaces more actionable insights than aggregate benchmarking. The framework itself — seven controlled ablations across four query categories — is the replicable contribution, independent of the specific metric values.
 
 ## 11. Appendix
 
