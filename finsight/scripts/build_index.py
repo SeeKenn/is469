@@ -24,6 +24,7 @@ import chromadb_compat  # noqa: F401
 
 from src.utils.config_loader import load_config
 from src.utils.logger import get_logger
+from src.utils.seeding import seed_from_config
 from src.indexing.dense_indexer import DenseIndexer
 from src.indexing.sparse_indexer import SparseIndexer
 
@@ -102,6 +103,7 @@ def main():
     args = parser.parse_args()
 
     cfg = load_config()
+    seed_from_config(cfg)
 
     if args.reset:
         logger.info("RESET mode: will delete and rebuild all indexes")

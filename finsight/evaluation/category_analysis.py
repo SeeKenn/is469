@@ -33,6 +33,9 @@ from typing import Dict, List, Optional
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.utils.config_loader import load_config
+from src.utils.seeding import seed_from_config
+
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 CATEGORIES = [
@@ -478,6 +481,9 @@ def main():
         help="Path to save the JSON report",
     )
     args = parser.parse_args()
+
+    cfg = load_config()
+    seed_from_config(cfg)
 
     results_path = Path(args.results)
     if not results_path.exists():

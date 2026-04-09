@@ -24,6 +24,7 @@ import chromadb_compat  # noqa: F401  — must precede any chromadb/pipeline imp
 
 from src.utils.config_loader import load_config, invalidate_config_cache
 from src.utils.logger import get_logger
+from src.utils.seeding import seed_from_config
 
 logger = get_logger(__name__)
 
@@ -90,6 +91,7 @@ def main():
     args = parser.parse_args()
 
     cfg = load_config()
+    seed_from_config(cfg)
     mode = args.mode or cfg["retrieval"].get("mode", "advanced")
 
     if mode not in ("baseline", "advanced"):

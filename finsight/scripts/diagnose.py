@@ -23,6 +23,9 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import chromadb_compat  # noqa: F401  — must precede any chromadb import
 
+from src.utils.config_loader import load_config
+from src.utils.seeding import seed_from_config
+
 OK   = "  ✓"
 FAIL = "  ✗"
 WARN = "  !"
@@ -155,6 +158,9 @@ def check_v1_retrieval():
 
 
 def main():
+    cfg = load_config()
+    seed_from_config(cfg)
+
     print("=" * 60)
     print("  FinSight Cluster Diagnostic")
     print("=" * 60)

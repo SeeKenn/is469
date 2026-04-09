@@ -9,7 +9,7 @@ A question-answering system over **official Microsoft Corporation SEC filings on
 | **V2 Advanced A** | Dense → Rerank → Generate | Dense retrieval + cross-encoder reranking |
 | **V3 Advanced B** | BM25 + Dense → RRF → Rerank → Generate | Hybrid retrieval + RRF fusion + reranking |
 | **V4 Advanced C** | Query Rewrite → Hybrid → Rerank → Generate | LLM query rewriting before hybrid retrieval |
-| **V5 Advanced D** | Metadata Filter → Dense → Rerank → Generate | Fiscal-period pre-filtering before dense search |
+| **V5 Advanced D** | Metadata Filter → Dense → Generate | Fiscal-period pre-filtering before dense search |
 | **V6 Advanced E** | Hybrid → Rerank → Compress → Generate | Context compression after reranking |
 
 ---
@@ -24,28 +24,43 @@ python3.11 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-# 2. Configure secrets
+# 2. Configure your LLM backend
 cp .env.example .env
-# Edit .env — add ANONYMIZED_TELEMETRY=False to suppress ChromaDB telemetry
+# Then update config/settings.yaml for one of these options:
+#   A. Direct OpenAI API: set generation.api_key to "" and put OPENAI_API_KEY in .env
+#   B. Local/HPC vLLM: set generation.base_url/model to your local endpoint and keep api_key=dummy
+# See cluster/README.md for the vLLM setup path.
 
-# 3. Run ingestion pipeline (parses PDFs in data/raw/)
-python scripts/ingest_all.py
-
-# 4. Build vector and BM25 indexes
-python scripts/build_index.py
-
-# 5. Verify everything works
+# 3. Verify the local artefacts and wiring
 python scripts/smoke_test.py
 
-# 6. Launch the app
+# 4. Launch the app
 streamlit run app/streamlit_app.py
 ```
+
+This repository snapshot already includes:
+- processed filing artefacts in `data/processed/`
+- built index artefacts in `indexes/chroma/` and `indexes/bm25/`
+
+That means you can run the app and evaluation without first downloading the raw PDFs. Download the PDFs only if you want to reproduce the ingestion step from scratch.
 
 ---
 
 ## Data Acquisition
 
-The following Microsoft SEC filings are indexed (already downloaded to `data/raw/`):
+There are two supported starting points:
+
+1. **Fast path (already included in this repo):**
+   - `data/processed/` contains chunked JSON artefacts for all 9 filings
+   - `indexes/chroma/` and `indexes/bm25/` contain built retrieval indexes
+   - this is enough to run the app, CLI, and evaluation scripts immediately
+
+2. **Full rebuild from raw PDFs:**
+   - download the following Microsoft SEC filings
+   - place them in `data/raw/` using the exact filenames below
+   - rerun `python scripts/ingest_all.py --force` and `python scripts/build_index.py --reset`
+
+Raw PDFs are **not committed** in the current repo snapshot. The expected filenames are:
 
 | Filename | Document | Period |
 |----------|----------|--------|
@@ -65,14 +80,30 @@ Source: [SEC EDGAR](https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&C
 
 ---
 
+## Rebuild From Raw PDFs
+
+```bash
+# 1. Download the 9 PDFs above into data/raw/
+
+# 2. Recreate processed chunks from the raw filings
+python scripts/ingest_all.py --force
+
+# 3. Rebuild both retrieval indexes from the processed JSON files
+python scripts/build_index.py --reset
+```
+
+If you do **not** need to regenerate `data/processed/`, you can skip ingestion and rebuild indexes directly from the committed processed artefacts.
+
+---
+
 ## Build Indexes
 
 ```bash
-# Full build (first time)
-python scripts/build_index.py
-
-# Force rebuild from scratch (after adding new documents)
+# Full rebuild from data/processed/
 python scripts/build_index.py --reset
+
+# Build using existing processed JSON without deleting existing indexes first
+python scripts/build_index.py
 
 # Build only the dense index
 python scripts/build_index.py --dense-only
@@ -127,13 +158,30 @@ Results are saved to `evaluation/results/eval_results.json` and a comparison tab
 
 ---
 
+## Run Analysis Scripts
+
+```bash
+# Re-score / back-fill saved evaluation outputs
+python evaluation/rescore_ragas.py --input evaluation/results/eval_results.json
+
+# Category breakdown + heuristic error analysis
+python evaluation/category_analysis.py --results evaluation/results/eval_results.json
+
+# Retrieval ablation study
+python evaluation/ablation_study.py
+```
+
+---
+
 ## Reproducibility
 
-- Random seed is `42`, set in `config/settings.yaml`
-- All model versions are pinned in `requirements.txt`
-- Index artefacts can be fully regenerated with `python scripts/build_index.py --reset`
-- Evaluation results are saved as JSON in `evaluation/results/` — commit these for reproducibility
-- Config parameters are read from YAML files only — nothing is hardcoded in `src/`
+- Project seed is `42`, configured in `config/settings.yaml` and applied by the main CLI, evaluation, and app entry points via `src/utils/seeding.py`
+- Core runtime parameters live in `config/settings.yaml`, `config/prompts.yaml`, and `config/chunking.yaml`
+- `data/processed/` contains committed chunked artefacts for the 9 Microsoft filings used in the project
+- Retrieval indexes can be regenerated from `data/processed/` with `python scripts/build_index.py --reset`
+- Evaluation outputs are saved under `evaluation/results/` as JSON artefacts
+- `requirements.txt` pins most Python package versions used by the project
+- Full raw-to-index reproduction is possible if you download the 9 PDFs into `data/raw/` and rerun ingestion + indexing
 
 ---
 
@@ -146,12 +194,12 @@ finsight/
 │   ├── chunking.yaml        # Chunking experiment configs
 │   └── prompts.yaml         # All prompt templates
 ├── data/
-│   ├── raw/                 # Microsoft SEC filing PDFs (not committed to git)
-│   ├── processed/           # Chunked + tagged JSON per document
+│   ├── raw/                 # Optional raw SEC PDFs for full ingestion rebuilds
+│   ├── processed/           # Committed chunked JSON artefacts for 9 filings
 │   └── metadata/            # Metadata schema
 ├── indexes/
-│   ├── chroma/              # ChromaDB vector store (not committed)
-│   └── bm25/                # BM25 index pickle files (not committed)
+│   ├── chroma/              # ChromaDB vector store (rebuildable)
+│   └── bm25/                # BM25 index pickle files (rebuildable)
 ├── src/
 │   ├── ingestion/           # PDF parsing, cleaning
 │   ├── chunking/            # Chunking strategies, metadata tagging
@@ -162,7 +210,12 @@ finsight/
 │   └── utils/               # Config loader, logger
 ├── evaluation/
 │   ├── eval_dataset.json    # 20-question benchmark (4 categories)
-│   ├── run_evaluation.py    # RAGAS evaluation runner
+│   ├── benchmark.csv        # Extended benchmark metadata
+│   ├── run_evaluation.py    # Main evaluation runner
+│   ├── ablation_study.py    # Retrieval ablation experiments
+│   ├── category_analysis.py # Category and failure analysis
+│   ├── metrics.py           # Derived evaluation metrics
+│   ├── rescore_ragas.py     # Re-score/back-fill saved runs
 │   └── results/             # JSON result files per run
 ├── app/
 │   └── streamlit_app.py     # Streamlit UI
@@ -170,11 +223,13 @@ finsight/
 │   ├── ingest_all.py        # Full ingestion pipeline
 │   ├── build_index.py       # Index builder
 │   ├── run_query.py         # CLI query tool
+│   ├── diagnose.py          # Backend/index diagnostics
 │   └── smoke_test.py        # Quick sanity check
 └── notebooks/
     ├── 01_data_exploration.ipynb
     ├── 02_chunking_experiment.ipynb
-    └── 03_retrieval_debug.ipynb
+    ├── 03_retrieval_debug.ipynb
+    └── 04_evaluation_analysis.ipynb
 ```
 
 ---
@@ -182,8 +237,9 @@ finsight/
 ## Configuration
 
 Edit `config/settings.yaml` to change:
+- Seed (`project.seed`)
 - Embedding model (`embeddings.model`)
-- LLM model and temperature (`generation.model`, `generation.temperature`)
+- LLM backend, model, endpoint, and temperature (`generation.backend`, `generation.model`, `generation.base_url`, `generation.temperature`)
 - Retrieval top-k values (`retrieval.dense_top_k`, etc.)
 - Retrieval mode (`retrieval.mode`: `baseline` or `advanced`)
 - Guardrails (`guardrails.out_of_scope_check`, `guardrails.require_citations`, etc.)
@@ -195,7 +251,9 @@ Edit `config/settings.yaml` to change:
 - Python 3.11 (recommended; numpy 1.26.4 incompatible with 3.14)
 - 8GB RAM minimum (16GB recommended for all models loaded simultaneously)
 - ~2GB disk space for indexes
-- vLLM server running `qwen2.5-14b` at `http://localhost:8000/v1` (or replace with OpenAI-compatible endpoint)
+- An OpenAI-compatible chat backend for answer generation and RAGAS judging
+- The checked-in config currently points to `gpt-4o-mini` via the OpenAI API
+- For local/HPC vLLM setup, see `cluster/README.md`
 
 ---
 
@@ -214,7 +272,7 @@ Edit `config/settings.yaml` to change:
 - Built fixed-size and semantic chunking strategies (`src/chunking/`)
 - Implemented ChromaDB dense indexer and BM25 sparse indexer (`src/indexing/`)
 - Implemented dense retriever, sparse retriever, and hybrid retriever with RRF fusion (`src/retrieval/`)
-- Built metadata-filtering retriever for V5 (`src/retrieval/verified_retriever.py`)
+- Built the metadata-aware retrieval flow used by V5 (`src/retrieval/query_processor.py`, `src/pipeline/advanced_d.py`)
 - Ran ingestion pipeline on cluster; generated `data/processed/` JSON files and BM25/Chroma indexes
 
 *Contributions of other members observed: Model & App Lead integrated the retrieval modules into end-to-end pipelines and resolved ChromaDB SQLite compatibility issues. Evaluation & Report Lead used the retrieval logs in `indexes/retrieval_logs/` to compute per-stage latency breakdowns in the evaluation.*

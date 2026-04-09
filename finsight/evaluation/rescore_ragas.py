@@ -30,6 +30,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.utils.config_loader import load_config
 from src.utils.logger import get_logger
+from src.utils.seeding import seed_from_config
 from evaluation.metrics import compute_numeric_match
 
 logger = get_logger(__name__)
@@ -224,6 +225,7 @@ def main():
     args = parser.parse_args()
 
     cfg = load_config()
+    seed_from_config(cfg)
     input_path = PROJECT_ROOT / args.input
     output_path = PROJECT_ROOT / (args.output or args.input)
 

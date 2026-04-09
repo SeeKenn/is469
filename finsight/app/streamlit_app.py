@@ -20,6 +20,10 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import streamlit as st
 
+from src.utils.seeding import seed_from_config
+
+seed_from_config()
+
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="FinSight — Microsoft Corporation",

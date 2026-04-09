@@ -27,6 +27,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.utils.config_loader import load_config, load_chunking_config
 from src.utils.logger import get_logger
+from src.utils.seeding import seed_from_config
 from src.ingestion.parser import extract_pages
 from src.ingestion.cleaner import clean_pages
 from src.chunking.chunker import chunk_pages
@@ -128,6 +129,7 @@ def main():
     args = parser.parse_args()
 
     cfg = load_config()
+    seed_from_config(cfg)
     chunking_config = load_chunking_config(args.chunking)
     docs = cfg.get("documents", [])
 

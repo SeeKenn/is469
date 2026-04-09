@@ -33,6 +33,7 @@ import chromadb_compat  # noqa: F401  — must precede any chromadb/pipeline imp
 
 from src.utils.config_loader import load_config
 from src.utils.logger import get_logger
+from src.utils.seeding import seed_from_config
 from evaluation.metrics import compute_numeric_match
 
 logger = get_logger(__name__)
@@ -437,6 +438,7 @@ def main():
     args = parser.parse_args()
 
     cfg = load_config()
+    seed_from_config(cfg)
 
     dataset_path = PROJECT_ROOT / args.dataset
     if not dataset_path.exists():
