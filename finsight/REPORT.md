@@ -598,7 +598,7 @@ The primary limitation of current pipelines is not retrieving information, but *
 
 * **Temporal reasoning is relatively easy once data is retrieved**
 	* V1, V3, V4, V5 all reach **80% accuracy**
-	* Numerical extraction is straightforward if the correct filing is retrieved.*Main challenge is retrieval, not reasoning*.
+	* Numerical extraction is straightforward if the correct filing is retrieved.The *main challenge is retrieval, not reasoning*.
 
 * **Multi-hop reasoning remains the hardest setting**
 	* No variant exceeds **40% accuracy**
