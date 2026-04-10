@@ -1,3 +1,5 @@
+Summary of report: https://finsight-project-is469.vercel.app/
+
 # FinSight: RAG-Based Financial Filings QA — Microsoft Corporation (NASDAQ: MSFT)
 
 A question-answering system over **official Microsoft Corporation SEC filings only**, implementing and comparing **seven pipeline variants (V0–V6)**:
